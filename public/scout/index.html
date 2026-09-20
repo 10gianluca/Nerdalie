@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Scout Online</title>
+  <meta name="description" content="Play the Scout card game online with a friend.">
+  <meta name="theme-color" content="#faf5dd">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
+  <script src="game.js" defer></script>
+  <script src="net.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main id="home" class="screen">
+    <a class="back" href="../">&larr; Back to the site</a>
+    <div class="brand">
+      <h1>Scout</h1>
+      <p>The circus card game, online with a friend</p>
+    </div>
+    <div class="stack">
+      <label class="field"><span>Your name</span>
+        <input id="nameInput" class="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
+      </label>
+      <button id="createBtn" class="btn primary big">Create a game</button>
+      <div class="divider">or join a friend's game</div>
+      <form id="joinForm" class="join">
+        <input id="codeInput" class="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+        <button class="btn primary" type="submit">Join</button>
+      </form>
+      <button id="resumeBtn" class="btn" hidden></button>
+    </div>
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>Every card has <b>two numbers</b>, one at each end. At the start of a round you may <b>turn your whole hand over</b> to use the other numbers. After that you <b>never rearrange</b> your hand.</li>
+        <li>On your turn you <b>Show</b>: play neighbouring cards from your hand that make a <b>set</b> (the same number) or a <b>run</b> (numbers in a row, going up or down). It has to <b>beat the set on the table</b>: more cards, or a set instead of a run, or higher numbers. You win the cards you beat.</li>
+        <li>Or you <b>Scout</b>: spend a chip to take the left or right card of the set on the table and put it <b>anywhere in your hand, either way up</b>. Then you keep going until you Show or run out of chips. You have <b>3 chips</b> each round.</li>
+        <li>A round ends when someone <b>goes out</b>, or when someone <b>can't Show and has no chips</b>.</li>
+        <li>Score: <b>cards you won + unspent chips − cards left in your hand</b>. The player nobody could beat keeps their hand for free. Two rounds, and the higher total wins.</li>
+      </ul>
+    </details>
+  </main>
+
+  <main id="lobby" class="screen lobby" hidden>
+    <p class="eyebrow">Room code</p>
+    <div id="lobbyCode" class="code"></div>
+    <p id="lobbyMsg"></p>
+    <div class="row">
+      <button id="shareBtn" class="btn primary">Share invite</button>
+      <button id="copyBtn" class="btn">Copy link</button>
+    </div>
+    <button id="cancelBtn" class="btn ghost">Cancel</button>
+  </main>
+
+  <main id="game" class="screen" hidden>
+    <header class="topbar">
+      <div class="room"><span id="netDot" class="dot"></span>Room <b id="roomCode"></b></div>
+      <button id="leaveBtn" class="btn ghost">Leave</button>
+    </header>
+    <div id="netBanner" class="banner" hidden></div>
+
+    <section class="panel">
+      <div id="scoreboard" class="scoreboard"></div>
+      <div id="oppHand" class="opphand" aria-hidden="true"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">On the table</span><span id="tableInfo" class="hint"></span></div>
+      <div id="tableSet" class="tableset"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Your hand</span><span id="handInfo" class="hint"></span></div>
+      <div id="hand" class="hand"></div>
+    </section>
+
+    <p id="lastTurn" class="last"></p>
+
+    <div id="bar" class="bar" aria-live="polite">
+      <p id="status" class="status"></p>
+      <div id="preview" class="preview"></div>
+      <div id="actions" class="actions"></div>
+    </div>
+  </main>
+
+  <dialog id="overDialog">
+    <div class="result">
+      <h2 id="overTitle"></h2>
+      <p id="overWhy" class="why"></p>
+      <table id="overTable"></table>
+      <div class="row">
+        <button id="nextBtn" class="btn primary">Next round</button>
+        <button id="closeOverBtn" class="btn">View table</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

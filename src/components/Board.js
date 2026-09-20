@@ -26,6 +26,10 @@ function Home() {
     e.preventDefault();
     window.location.href = `${process.env.PUBLIC_URL}/lost-cities/`;
   };
+  const navScout = (e) => {
+    e.preventDefault();
+    window.location.href = `${process.env.PUBLIC_URL}/scout/`;
+  };
   return (
   <body className="pageHome"> 
     <div className="HomePage">
@@ -37,6 +41,7 @@ function Home() {
         <button className="onlineButton" id="buttons" onClick={navQwintoOnline}> QWINTO ONLINE</button>
         <button className="agentButton" id="buttons" onClick={navAgentAvenue}> AGENT AVENUE</button>
         <button className="lostButton" id="buttons" onClick={navLostCities}> LOST CITIES</button>
+        <button className="scoutButton" id="buttons" onClick={navScout}> SCOUT</button>
 
       </div>
     </div>

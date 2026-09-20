@@ -49,6 +49,7 @@ html, body {
 .onlineButton,
 .agentButton,
 .lostButton,
+.scoutButton,
 .loveButton {
   display: inline-block;
   padding: 10px 20px;
