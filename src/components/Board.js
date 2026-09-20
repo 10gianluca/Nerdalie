@@ -18,6 +18,10 @@ function Home() {
     e.preventDefault();
     window.location.href = `${process.env.PUBLIC_URL}/qwinto-online/`;
   };
+  const navAgentAvenue = (e) => {
+    e.preventDefault();
+    window.location.href = `${process.env.PUBLIC_URL}/agent-avenue/`;
+  };
   return (
   <body className="pageHome"> 
     <div className="HomePage">
@@ -27,6 +31,7 @@ function Home() {
         <button className="sillyButton" id="buttons" onClick={navUno}> UNO</button>
         <button className="boredButton" id="buttons" onClick={navQwinto} > QWINTO</button>
         <button className="onlineButton" id="buttons" onClick={navQwintoOnline}> QWINTO ONLINE</button>
+        <button className="agentButton" id="buttons" onClick={navAgentAvenue}> AGENT AVENUE</button>
 
       </div>
     </div>

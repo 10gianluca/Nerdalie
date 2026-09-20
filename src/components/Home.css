@@ -47,6 +47,7 @@ html, body {
 .boredButton,
 .BoardButton,
 .onlineButton,
+.agentButton,
 .loveButton {
   display: inline-block;
   padding: 10px 20px;
@@ -64,8 +65,9 @@ html, body {
   height: 50px;
 }
 
-/* Longer label than the other buttons, so let it grow instead of wrapping */
-.onlineButton {
+/* Longer labels than the other buttons, so let them grow instead of wrapping */
+.onlineButton,
+.agentButton {
   width: auto;
   min-width: 150px;
   padding: 10px 24px;

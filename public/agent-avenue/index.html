@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Agent Avenue Online</title>
+  <meta name="description" content="Play the Agent Avenue card game online with a friend.">
+  <meta name="theme-color" content="#faf5dd">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
+  <script src="cards.js" defer></script>
+  <script src="game.js" defer></script>
+  <script src="net.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main id="home" class="screen">
+    <a class="back" href="../">&larr; Back to the site</a>
+    <div class="brand">
+      <h1>Agent Avenue</h1>
+      <p>The spy card game, online with a friend</p>
+    </div>
+    <div class="stack">
+      <label class="field"><span>Your name</span>
+        <input id="nameInput" class="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
+      </label>
+      <button id="createBtn" class="btn primary big">Create a game</button>
+      <div class="divider">or join a friend's game</div>
+      <form id="joinForm" class="join">
+        <input id="codeInput" class="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+        <button class="btn primary" type="submit">Join</button>
+      </form>
+      <button id="resumeBtn" class="btn" hidden></button>
+    </div>
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>Two spies chase each other around a circular track. <b>Catch the other meeple</b> by reaching or passing their space, and you win.</li>
+        <li>Each turn, the active player plays <b>two cards with different names</b>: one face-up, one face-down. The other player <b>picks one</b> and gets it. You keep the other.</li>
+        <li>Each card shows three numbers. How far you move depends on <b>how many of that agent you have in play</b>: the 1st, 2nd or 3rd+ number. Negative numbers move you backwards.</li>
+        <li><b>3 Codebreakers</b> in play wins the game. <b>3 Daredevils</b> in play loses it.</li>
+        <li>Before playing, you can <b>discard a card and redraw</b>, up to 4 times a game.</li>
+        <li>If the deck runs out, whoever is closer to catching the other wins.</li>
+      </ul>
+    </details>
+  </main>
+
+  <main id="lobby" class="screen lobby" hidden>
+    <p class="eyebrow">Room code</p>
+    <div id="lobbyCode" class="code"></div>
+    <p id="lobbyMsg"></p>
+    <div class="row">
+      <button id="shareBtn" class="btn primary">Share invite</button>
+      <button id="copyBtn" class="btn">Copy link</button>
+    </div>
+    <button id="cancelBtn" class="btn ghost">Cancel</button>
+  </main>
+
+  <main id="game" class="screen" hidden>
+    <header class="topbar">
+      <div class="room"><span id="netDot" class="dot"></span>Room <b id="roomCode"></b></div>
+      <button id="leaveBtn" class="btn ghost">Leave</button>
+    </header>
+    <div id="netBanner" class="banner" hidden></div>
+
+    <section class="panel track">
+      <svg id="track" viewBox="0 0 240 240" role="img" aria-label="Circular track showing both meeples"></svg>
+      <div id="gapInfo" class="gap-info"></div>
+    </section>
+
+    <section class="panel table" aria-live="polite">
+      <p id="status" class="status"></p>
+      <p id="substatus" class="substatus"></p>
+      <div id="offer" class="offer"></div>
+      <div id="actions" class="actions"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Your hand</span><span id="deckInfo" class="hint"></span></div>
+      <div id="hand" class="hand"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span id="oppName" class="name"></span><span class="hint">in play</span></div>
+      <div id="oppPlay" class="playarea"></div>
+      <div class="area-head second"><span id="myName" class="name"></span><span class="hint">in play</span></div>
+      <div id="myPlay" class="playarea"></div>
+      <p id="lastTurn" class="last"></p>
+    </section>
+  </main>
+
+  <dialog id="overDialog">
+    <div class="result">
+      <h2 id="overTitle"></h2>
+      <p id="overWhy" class="why"></p>
+      <div class="row">
+        <button id="rematchBtn" class="btn primary">Rematch</button>
+        <button id="closeOverBtn" class="btn">View table</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
