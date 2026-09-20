@@ -13,6 +13,11 @@ function Home() {
     e.preventDefault();
     navigate('/Qwinto')
   }
+  // The online game is a self-contained page in public/qwinto-online, not a React route.
+  const navQwintoOnline = (e) => {
+    e.preventDefault();
+    window.location.href = `${process.env.PUBLIC_URL}/qwinto-online/`;
+  };
   return (
   <body className="pageHome"> 
     <div className="HomePage">
@@ -21,6 +26,7 @@ function Home() {
       <div class="buttonsContainer">
         <button className="sillyButton" id="buttons" onClick={navUno}> UNO</button>
         <button className="boredButton" id="buttons" onClick={navQwinto} > QWINTO</button>
+        <button className="onlineButton" id="buttons" onClick={navQwintoOnline}> QWINTO ONLINE</button>
 
       </div>
     </div>
