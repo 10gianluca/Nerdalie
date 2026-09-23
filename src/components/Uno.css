@@ -3,7 +3,10 @@
     src: local("IMFellDWPica-Italic.ttf"),
         url("./fonts/IMFellDWPica-Italic.ttf") format("truetype");
 }
-body{
+/* Scoped to Uno's own page wrapper, not the bare document body: a plain `body{}` rule here was
+   leaking into every other page too, since this app bundles all CSS globally with no per-route
+   scoping — it silently disabled scrolling site-wide, not just on the Uno page. */
+.pageUno{
     overflow: hidden;
 
 }
