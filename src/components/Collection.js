@@ -3,15 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import './Collection.css';
 import {
   fetchSheetCsv, parseCsv, buildHeaderIndex, extraHeaders, distinctValues, filterRows, sortEntries,
-  bggFindCandidates, bggOwnedCollection, missingFromSheet, buildRowFromThing, appendRowViaScript,
-  bggGameUrl, bggCollectionUrl,
+  bggFindCandidates, bggOwnedCollection, missingFromSheet, incompleteRows, buildRowFromThing,
+  buildPatchFromThing, appendRowViaScript, updateRowViaScript, bggGameUrl, bggCollectionUrl, cellAt,
 } from './collectionUtils';
 
 const SETTINGS_KEY = 'nerdalie.collection.settings';
 const SCRIPT_HELP = `function doPost(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   var data = JSON.parse(e.postData.contents);
-  sheet.appendRow(data.row);
+  if (data.update) {
+    var rowNum = data.update.rowIndex + 2; // row 1 is the header
+    var range = sheet.getRange(rowNum, 1, 1, sheet.getLastColumn());
+    var values = range.getValues()[0];
+    for (var col in data.update.patch) values[Number(col)] = data.update.patch[col];
+    range.setValues([values]);
+  } else {
+    sheet.appendRow(data.row);
+  }
   return ContentService.createTextOutput(JSON.stringify({ ok: true }))
     .setMimeType(ContentService.MimeType.JSON);
 }`;
@@ -53,11 +61,18 @@ function Collection() {
   const [addError, setAddError] = useState('');
   const [addCandidates, setAddCandidates] = useState([]);
 
-  // One shared review card, opened either from the sync queue or from a manual search pick.
-  const [review, setReview] = useState(null); // { item, title, source: 'sync' | 'search' }
+  // One shared review card, opened from the sync queue, a manual search pick, or the enrich queue.
+  const [review, setReview] = useState(null); // { item, title, source: 'sync'|'search'|'enrich', rowIndex?, existingRow? }
   const [reviewExtra, setReviewExtra] = useState({});
   const [reviewBusy, setReviewBusy] = useState(false);
   const [reviewStatus, setReviewStatus] = useState('');
+
+  // "Fill in missing info": existing rows with a name but blank BGG-fillable columns, reviewed
+  // one at a time — each one auto-searches BGG so there's a match to confirm.
+  const [enrichQueue, setEnrichQueue] = useState(null); // null = not started this visit
+  const [enrichCandidates, setEnrichCandidates] = useState([]);
+  const [enrichBusy, setEnrichBusy] = useState(false);
+  const [enrichError, setEnrichError] = useState('');
 
   const idx = useMemo(() => buildHeaderIndex(headers), [headers]);
   const extras = useMemo(() => extraHeaders(headers, idx), [headers, idx]);
@@ -106,10 +121,21 @@ function Collection() {
     if (next.sheetLink !== settings.sheetLink && next.sheetLink) loadSheet(next.sheetLink);
   }
 
-  function openReview(item, title, source) {
-    setReview({ item, title, source });
-    setReviewExtra({});
+  function openReview(next) {
+    setReview(next); // { item, title, source, rowIndex?, existingRow? }
+    setReviewExtra(next.presetExtra || {});
     setReviewStatus('');
+  }
+
+  // The extra (non-BGG) column values a row already has, keyed by column index — so reviewing an
+  // existing row shows what's there already instead of blank inputs.
+  function presetExtrasFor(row) {
+    const preset = {};
+    extras.forEach(({ i: colI }) => {
+      const v = cellAt(row, colI);
+      if (v) preset[colI] = v;
+    });
+    return preset;
   }
 
   function closeReview() {
@@ -128,7 +154,7 @@ function Collection() {
       const owned = await bggOwnedCollection(settings.bggUsername);
       const need = missingFromSheet(owned, rows, idx);
       setMissing(need);
-      if (need.length) openReview(need[0], need[0].name, 'sync');
+      if (need.length) openReview({ item: need[0], title: need[0].name, source: 'sync' });
     } catch (err) {
       setSyncError(err.message || 'Could not read your BGG collection');
     } finally {
@@ -139,10 +165,59 @@ function Collection() {
   function nextInQueue(afterId) {
     setMissing((list) => {
       const rest = (list || []).filter((g) => g.id !== afterId);
-      if (rest.length) openReview(rest[0], rest[0].name, 'sync');
+      if (rest.length) openReview({ item: rest[0], title: rest[0].name, source: 'sync' });
       else closeReview();
       return rest;
     });
+  }
+
+  // The BGG search for whichever row is now first in the enrich queue; auto-runs whenever that
+  // changes (starting the queue, skipping, or saving a row), so there's always something to review.
+  async function searchEnrichHead(queue) {
+    setEnrichCandidates([]);
+    setEnrichError('');
+    if (!queue.length) return;
+    const name = cellAt(queue[0].row, idx.GAME);
+    setEnrichBusy(true);
+    try {
+      const found = await bggFindCandidates(name);
+      setEnrichCandidates(found);
+      if (!found.length) setEnrichError(`No BGG matches for "${name}". You can still save any extra info below.`);
+    } catch (err) {
+      setEnrichError(err.message || 'The search failed');
+    } finally {
+      setEnrichBusy(false);
+    }
+  }
+
+  function runEnrich() {
+    if (!headers.length) return;
+    const queue = incompleteRows(rows, idx);
+    setEnrichQueue(queue);
+    closeReview();
+    searchEnrichHead(queue);
+  }
+
+  function pickEnrichCandidate(candidate) {
+    const entry = enrichQueue[0];
+    openReview({ item: candidate, title: cellAt(entry.row, idx.GAME), source: 'enrich', rowIndex: entry.i, existingRow: entry.row, presetExtra: presetExtrasFor(entry.row) });
+  }
+
+  // "No BGG match" still lets the row's extra columns be saved: an all-blank BGG item contributes
+  // nothing via buildPatchFromThing, so only whatever is typed into the extras below gets written.
+  function saveEnrichWithoutMatch() {
+    const entry = enrichQueue[0];
+    const empty = { id: '', name: '', year: '', minPlayers: '', maxPlayers: '', playTime: '', rating: '', image: '', type: '' };
+    openReview({ item: empty, title: cellAt(entry.row, idx.GAME), source: 'enrich', rowIndex: entry.i, existingRow: entry.row, presetExtra: presetExtrasFor(entry.row) });
+  }
+
+  function nextEnrichItem() {
+    setEnrichQueue((q) => {
+      const rest = (q || []).slice(1);
+      searchEnrichHead(rest);
+      return rest;
+    });
+    closeReview();
   }
 
   async function searchAdd(e) {
@@ -175,6 +250,35 @@ function Collection() {
       setReviewStatus('Set up 1-click adding below first (a one-time, 5-minute step), then come back and try again.');
       return;
     }
+    if (review.source === 'enrich') {
+      const patch = buildPatchFromThing(idx, review.existingRow, review.item);
+      for (const [i, v] of Object.entries(reviewExtra)) if (v) patch[Number(i)] = v;
+      if (!Object.keys(patch).length) {
+        setReviewStatus('Nothing to save — no BGG match and no extra info typed in.');
+        return;
+      }
+      setReviewBusy(true);
+      setReviewStatus('Saving…');
+      try {
+        await updateRowViaScript(settings.scriptUrl, review.rowIndex, patch);
+        setRows((r) => {
+          const copy = [...r];
+          const updated = [...copy[review.rowIndex]];
+          for (const [i, v] of Object.entries(patch)) updated[Number(i)] = v;
+          copy[review.rowIndex] = updated;
+          return copy;
+        });
+        nextEnrichItem();
+      } catch (err) {
+        setReviewStatus('');
+        setReviewBusy(false);
+        alert(err.message || 'Could not reach your sheet script. Double check the URL in Settings, and that it has the update branch shown in the setup help.');
+        return;
+      }
+      setReviewBusy(false);
+      return;
+    }
+
     const row = buildRowFromThing(headers, idx, review.item, review.title, reviewExtra);
     setReviewBusy(true);
     setReviewStatus('Adding to your sheet…');
@@ -205,15 +309,22 @@ function Collection() {
   const reviewCard = review && (
     <div className="gcCard gcReview">
       <div className="gcReviewHead">
-        <img className="gcCover" src={review.item.image} alt="" onError={(e) => (e.target.style.visibility = 'hidden')} />
+        {review.item.image
+          ? <img className="gcCover" src={review.item.image} alt="" onError={(e) => (e.target.style.visibility = 'hidden')} />
+          : <div className="gcCover" />}
         <div>
           <div className="gcCandName">{review.title}{review.item.year ? ` (${review.item.year})` : ''}</div>
-          <div className="gcMuted">
-            {review.item.minPlayers || '?'}–{review.item.maxPlayers || '?'} players · {review.item.playTime || '?'} min
-            {review.item.type ? ` · ${review.item.type}` : ''}{review.item.rating ? ` · BGG ★${review.item.rating}` : ''}
-          </div>
+          {(review.item.minPlayers || review.item.maxPlayers || review.item.playTime || review.item.rating) && (
+            <div className="gcMuted">
+              {review.item.minPlayers || '?'}–{review.item.maxPlayers || '?'} players · {review.item.playTime || '?'} min
+              {review.item.type ? ` · ${review.item.type}` : ''}{review.item.rating ? ` · BGG ★${review.item.rating}` : ''}
+            </div>
+          )}
           {review.source === 'sync' && (
             <div className="gcMuted">In your BGG collection, not yet in your sheet{missing && missing.length > 1 ? ` · ${missing.length - 1} more to review after this` : ''}</div>
+          )}
+          {review.source === 'enrich' && (
+            <div className="gcMuted">{review.item.id ? 'Confirmed match — fills in whatever is blank' : 'No BGG match picked'}{enrichQueue && enrichQueue.length > 1 ? ` · ${enrichQueue.length - 1} more to review after this` : ''}</div>
           )}
         </div>
       </div>
@@ -231,9 +342,12 @@ function Collection() {
       )}
 
       <div className="gcRow">
-        <button className="gcBtn gcPrimary" onClick={confirmAdd} disabled={reviewBusy}>{reviewBusy ? 'Adding…' : 'Add to my Sheet'}</button>
+        <button className="gcBtn gcPrimary" onClick={confirmAdd} disabled={reviewBusy}>
+          {review.source === 'enrich' ? (reviewBusy ? 'Saving…' : 'Save to this row') : (reviewBusy ? 'Adding…' : 'Add to my Sheet')}
+        </button>
         {review.source === 'sync' && <button className="gcBtn gcGhost" onClick={() => nextInQueue(review.item.id)} disabled={reviewBusy}>Skip</button>}
-        <a className="gcBtn" href={bggGameUrl(review.item.id)} target="_blank" rel="noreferrer">View on BoardGameGeek ↗</a>
+        {review.source === 'enrich' && <button className="gcBtn gcGhost" onClick={nextEnrichItem} disabled={reviewBusy}>Skip this row</button>}
+        {review.item.id && <a className="gcBtn" href={bggGameUrl(review.item.id)} target="_blank" rel="noreferrer">View on BoardGameGeek ↗</a>}
         <button className="gcBtn gcGhost" onClick={closeReview} disabled={reviewBusy}>Close</button>
       </div>
       {reviewStatus && <p className="gcMuted">{reviewStatus}</p>}
@@ -378,6 +492,48 @@ function Collection() {
         </section>
 
         <section className="gcCard">
+          <div className="gcCardHead">
+            <h2>Fill in missing info</h2>
+          </div>
+          {!settings.sheetLink ? (
+            <p className="gcMuted">Add your Google Sheet link above to use this.</p>
+          ) : (
+            <>
+              <div className="gcRow">
+                <button className="gcBtn gcPrimary" onClick={runEnrich} disabled={loading || !rows.length}>
+                  {enrichQueue ? 'Check again' : 'Find games missing info'}
+                </button>
+              </div>
+              {enrichQueue && !enrichQueue.length && !review && <p className="gcMuted">Every row already has its BGG info filled in. 🎉</p>}
+              {enrichQueue && enrichQueue.length > 0 && !review && (
+                <p className="gcHint">Row: {cellAt(enrichQueue[0].row, idx.GAME)}{enrichQueue.length > 1 ? ` (+${enrichQueue.length - 1} more)` : ''}</p>
+              )}
+              {enrichBusy && <p className="gcMuted">Searching BGG…</p>}
+              {enrichError && <p className="gcError">{enrichError}</p>}
+
+              {!!enrichCandidates.length && review?.source !== 'enrich' && (
+                <div className="gcCandidates">
+                  {enrichCandidates.map((c) => (
+                    <button key={c.id} type="button" className="gcCandidate" onClick={() => pickEnrichCandidate(c)}>
+                      {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
+                      <span className="gcCandName">{c.name}</span>
+                      <span className="gcMuted">{c.year}{c.rating ? ` · ★${c.rating}` : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {enrichQueue && enrichQueue.length > 0 && !enrichBusy && review?.source !== 'enrich' && (
+                <div className="gcRow">
+                  <button className="gcBtn gcGhost" onClick={nextEnrichItem}>Skip this row</button>
+                  <button className="gcBtn gcGhost" onClick={saveEnrichWithoutMatch}>No BGG match — save extra info only</button>
+                </div>
+              )}
+              {review && review.source === 'enrich' && reviewCard}
+            </>
+          )}
+        </section>
+
+        <section className="gcCard">
           <h2>Add a game not on BGG yet</h2>
           <form className="gcRow" onSubmit={searchAdd}>
             <input className="gcInput" placeholder="Game title…" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
@@ -388,7 +544,7 @@ function Collection() {
           {!!addCandidates.length && (
             <div className="gcCandidates">
               {addCandidates.map((c) => (
-                <button key={c.id} type="button" className={`gcCandidate${review?.item.id === c.id && review.source === 'search' ? ' gcSelected' : ''}`} onClick={() => openReview(c, addTitle, 'search')}>
+                <button key={c.id} type="button" className={`gcCandidate${review?.item.id === c.id && review.source === 'search' ? ' gcSelected' : ''}`} onClick={() => openReview({ item: c, title: addTitle, source: 'search' })}>
                   {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
                   <span className="gcCandName">{c.name}</span>
                   <span className="gcMuted">{c.year}{c.rating ? ` · ★${c.rating}` : ''}</span>
@@ -403,7 +559,8 @@ function Collection() {
           <summary>How this works</summary>
           <ul>
             <li>The <b>collection view</b> and <b>BGG sync</b> read your Sheet and your public "owned" BGG list directly — nothing needs to be typed twice.</li>
-            <li><b>Adding to your Sheet</b> is fully automatic once you set up the small script above — no login needed on this page.</li>
+            <li><b>Fill in missing info</b> looks at rows already in your sheet, searches BGG for each one, and — once you confirm the match — fills in only the blank cells, leaving anything you've already typed alone.</li>
+            <li>Both <b>adding</b> and <b>filling in missing info</b> write to your Sheet automatically once you set up the small script above — no login needed on this page. If you set the script up before this feature existed, open Apps Script and replace the code with the current version (same deployment, same URL — no need to change anything here).</li>
             <li>BoardGameGeek has no way for another website to add to a collection there — not even for official apps — so if a game isn't on BGG yet, add it there yourself in the normal way; this page only reads what's already there.</li>
             <li>Add a <b>BGGID</b> column to your sheet (optional) and future syncs will match by BGG's own ID instead of the name, which is more reliable for reprints and renamed editions.</li>
             <li>Nothing here is sent anywhere but Google, BoardGameGeek, and your own browser's storage. This page keeps no database of its own.</li>

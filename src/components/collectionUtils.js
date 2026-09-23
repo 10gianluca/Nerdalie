@@ -167,6 +167,37 @@ export function sortEntries(entries, idx, key, dir = 'asc') {
 // stripped, so "Brass: Birmingham" and "brass birmingham" line up.
 export const matchKey = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
+// The canonical columns a BGG match can fill in on an existing row.
+const ENRICHABLE = ['YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'RATING', 'IMAGE', 'BGGID'];
+
+// Sheet rows that have a name but are missing at least one BGG-fillable value the sheet actually
+// has a column for. A column the sheet doesn't track at all doesn't count as "missing".
+export function incompleteRows(rows, idx) {
+  const cols = ENRICHABLE.map((k) => idx[k]).filter((i) => i >= 0);
+  return rows
+    .map((row, i) => ({ row, i }))
+    .filter(({ row }) => cellAt(row, idx.GAME) && cols.some((c) => !cellAt(row, c)));
+}
+
+// Which blank cells on an existing row a BGG match can fill — never overwrites a value that's
+// already there, so a correction someone already typed in stays put.
+export function buildPatchFromThing(idx, existingRow, thing) {
+  const patch = {};
+  const maybe = (key, value) => {
+    const col = idx[key];
+    if (col >= 0 && value && !cellAt(existingRow, col)) patch[col] = value;
+  };
+  maybe('YEAR', thing.year);
+  maybe('MIN', thing.minPlayers);
+  maybe('MAX', thing.maxPlayers);
+  maybe('TIME', thing.playTime);
+  maybe('TYPE', thing.type);
+  maybe('RATING', thing.rating);
+  maybe('IMAGE', thing.image);
+  maybe('BGGID', thing.id);
+  return patch;
+}
+
 // Every sheet GAME name and every BGGID already present, for checking what's already tracked.
 function existingKeys(rows, idx) {
   const names = new Set();
@@ -308,6 +339,26 @@ export async function appendRowViaScript(scriptUrl, row) {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ row }),
+  });
+  if (!res.ok) throw new Error(`The script replied with ${res.status}`);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {
+    // some deployments reply with plain text; treat a 2xx as success either way
+  }
+  if (data && data.ok === false) throw new Error(data.error || 'The script reported an error');
+  return true;
+}
+
+// Updates specific cells on an existing sheet row (by its 0-based data-row position, i.e. how far
+// down from the header) via the same Apps Script Web App, which needs its `doPost` extended with
+// an `update` branch alongside the original `append` one (see the in-page setup help).
+export async function updateRowViaScript(scriptUrl, rowIndex, patch) {
+  const res = await fetch(scriptUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ update: { rowIndex, patch } }),
   });
   if (!res.ok) throw new Error(`The script replied with ${res.status}`);
   let data = null;
