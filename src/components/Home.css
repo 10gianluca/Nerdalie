@@ -50,6 +50,7 @@ html, body {
 .agentButton,
 .lostButton,
 .scoutButton,
+.collectionButton,
 .loveButton {
   display: inline-block;
   padding: 10px 20px;
@@ -70,7 +71,8 @@ html, body {
 /* Longer labels than the other buttons, so let them grow instead of wrapping */
 .onlineButton,
 .agentButton,
-.lostButton {
+.lostButton,
+.collectionButton {
   width: auto;
   min-width: 150px;
   padding: 10px 24px;

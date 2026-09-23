@@ -30,6 +30,11 @@ function Home() {
     e.preventDefault();
     window.location.href = `${process.env.PUBLIC_URL}/scout/`;
   };
+  // Collection is a real React route (it needs client state/settings), not a public/ static page.
+  const navCollection = (e) => {
+    e.preventDefault();
+    navigate('/Games');
+  };
   return (
   <body className="pageHome"> 
     <div className="HomePage">
@@ -42,6 +47,7 @@ function Home() {
         <button className="agentButton" id="buttons" onClick={navAgentAvenue}> AGENT AVENUE</button>
         <button className="lostButton" id="buttons" onClick={navLostCities}> LOST CITIES</button>
         <button className="scoutButton" id="buttons" onClick={navScout}> SCOUT</button>
+        <button className="collectionButton" id="buttons" onClick={navCollection}> GAME LIST</button>
 
       </div>
     </div>

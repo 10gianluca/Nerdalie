@@ -7,6 +7,7 @@ import Board from "./components/Board";
 import Uno from "./components/Uno";
 import Qwinto from "./components/Qwinto";
 import Love from "./components/Love"
+import Collection from "./components/Collection"
 import "./fonts/Merisa-gxvMY.ttf";
 import "./fonts/IMFellDWPica-Italic.ttf"
 
@@ -21,6 +22,7 @@ function App() {
       <Route   path="/Uno" element={<Uno />} />
       <Route   path="/Qwinto" element={<Qwinto />}/>
       <Route   path="/Love" element={<Love />}/>
+      <Route   path="/Games" element={<Collection />}/>
     </Routes>
   );
 }
