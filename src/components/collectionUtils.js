@@ -17,9 +17,9 @@ async function callFn(path, params) {
 
 // ---------- Google Sheet ----------
 
-const fetchSheetCsv = (sheetLink) => callFn('sheet', { link: sheetLink });
+export const fetchSheetCsv = (sheetLink) => callFn('sheet', { link: sheetLink });
 
-function parseCsv(text) {
+export function parseCsv(text) {
   const rows = [];
   let i = 0;
   const n = text.length;
@@ -85,11 +85,11 @@ const HEADER_ALIASES = {
   image: 'IMAGE',
   bggid: 'BGGID', 'bgg id': 'BGGID',
 };
-const CANONICAL = ['GAME', 'YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'BGG RATING', 'IMAGE', 'BGGID'];
+export const CANONICAL = ['GAME', 'YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'BGG RATING', 'IMAGE', 'BGGID'];
 
 // Maps a canonical column name (GAME, YEAR, MIN, MAX, TIME, TYPE, BGG RATING, IMAGE, BGGID) to its
 // index in `headers`, however the sheet actually spelled it, or -1 if the sheet doesn't have it.
-function buildHeaderIndex(headers) {
+export function buildHeaderIndex(headers) {
   const found = {};
   headers.forEach((h, i) => {
     const canon = HEADER_ALIASES[normalizeHeader(h)] || h.trim().toUpperCase();
@@ -100,12 +100,12 @@ function buildHeaderIndex(headers) {
 }
 
 // Header names the sheet has beyond the ones BGG can fill in — these need a person to fill them in.
-function extraHeaders(headers, idx) {
+export function extraHeaders(headers, idx) {
   const known = new Set([idx.GAME, idx.YEAR, idx.MIN, idx.MAX, idx.TIME, idx.TYPE, idx.RATING, idx.IMAGE, idx.BGGID].filter((i) => i >= 0));
   return headers.map((h, i) => ({ name: h, i })).filter(({ i }) => !known.has(i));
 }
 
-const cellAt = (row, i) => (i >= 0 && i < row.length ? (row[i] || '').trim() : '');
+export const cellAt = (row, i) => (i >= 0 && i < row.length ? (row[i] || '').trim() : '');
 const numAt = (row, i) => {
   const v = cellAt(row, i);
   const n = parseFloat(v);
@@ -113,7 +113,7 @@ const numAt = (row, i) => {
 };
 
 // Every distinct, non-empty value in a column, in first-seen order (case-insensitively deduped).
-function distinctValues(rows, colIndex) {
+export function distinctValues(rows, colIndex) {
   if (colIndex < 0) return [];
   const seen = new Map();
   for (const r of rows) {
@@ -125,7 +125,7 @@ function distinctValues(rows, colIndex) {
 
 // A row matches the player-count filter if MIN..MAX spans it; missing MIN/MAX defaults are forgiving
 // (1..Infinity) so incomplete rows aren't hidden just because that data was never filled in.
-function filterRows(rows, idx, { text = '', players = '', type = '' } = {}) {
+export function filterRows(rows, idx, { text = '', players = '', type = '' } = {}) {
   const q = text.trim().toLowerCase();
   const n = players === '' ? null : Number(players);
   return rows
@@ -144,7 +144,7 @@ function filterRows(rows, idx, { text = '', players = '', type = '' } = {}) {
 
 // Sorts {row,i} entries (from filterRows) by a canonical column name; numeric where the column is
 // numeric-looking, alphabetic otherwise. Stable: ties keep their original relative order.
-function sortEntries(entries, idx, key, dir = 'asc') {
+export function sortEntries(entries, idx, key, dir = 'asc') {
   const col = idx[key];
   if (col == null || col < 0) return entries;
   const sign = dir === 'desc' ? -1 : 1;
@@ -165,7 +165,7 @@ function sortEntries(entries, idx, key, dir = 'asc') {
 
 // A loose key for matching a sheet row to a BGG item: lowercase name with punctuation/spacing
 // stripped, so "Brass: Birmingham" and "brass birmingham" line up.
-const matchKey = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export const matchKey = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 // Every sheet GAME name and every BGGID already present, for checking what's already tracked.
 function existingKeys(rows, idx) {
@@ -182,11 +182,11 @@ function existingKeys(rows, idx) {
 
 // ---------- BoardGameGeek ----------
 
-function cleanQuery(q) {
+export function cleanQuery(q) {
   return (q || '').replace(/[()[\]{}:!.,]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-async function bggSearch(query, exact = false) {
+export async function bggSearch(query, exact = false) {
   const xml = await callFn('bgg', { mode: 'search', q: exact ? `${query}&exact=1` : query });
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   return [...doc.querySelectorAll('items > item')].map((it) => ({
@@ -198,7 +198,7 @@ async function bggSearch(query, exact = false) {
 
 const nameOf = (el) => (el ? el.getAttribute('value') || el.textContent || '' : '');
 
-function modesFromLinks(links = []) {
+export function modesFromLinks(links = []) {
   const vals = links.map((l) => (l.value || '').toLowerCase());
   const modes = new Set();
   if (vals.some((v) => v.includes('solo / solitaire'))) modes.add('solo');
@@ -208,7 +208,7 @@ function modesFromLinks(links = []) {
   return [...modes].join(', ');
 }
 
-async function bggThing(ids) {
+export async function bggThing(ids) {
   if (!ids.length) return [];
   const xml = await callFn('bgg', { mode: 'thing', ids: ids.join(',') });
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
@@ -230,7 +230,7 @@ async function bggThing(ids) {
 }
 
 // The best few search results, ranked by how closely the name matches (simple word-overlap score).
-async function bggFindCandidates(query, limit = 6) {
+export async function bggFindCandidates(query, limit = 6) {
   const cleaned = cleanQuery(query);
   if (!cleaned) return [];
   let results = await bggSearch(cleaned, true);
@@ -252,7 +252,7 @@ async function bggFindCandidates(query, limit = 6) {
 
 // Everything in a BGG collection marked "own", with the same stats shape as bggThing()'s results,
 // read straight from the collection endpoint's own <stats> block (one call, not one per game).
-async function bggOwnedCollection(username) {
+export async function bggOwnedCollection(username) {
   const xml = await callFn('bgg', { mode: 'collection', username });
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const errorText = doc.querySelector('errors message, error message')?.textContent;
@@ -275,14 +275,14 @@ async function bggOwnedCollection(username) {
 }
 
 // Owned BGG items whose name (or BGGID) isn't already in the sheet.
-function missingFromSheet(owned, rows, idx) {
+export function missingFromSheet(owned, rows, idx) {
   const { names, ids } = existingKeys(rows, idx);
   return owned.filter((g) => !(g.id && ids.has(g.id)) && !names.has(matchKey(g.name)));
 }
 
 // A new sheet row, in the sheet's own column order, filling whichever of the canonical columns
 // exist and any extra values a person typed in for the columns BGG can't supply.
-function buildRowFromThing(headers, idx, thing, titleOverride, extraValues = {}) {
+export function buildRowFromThing(headers, idx, thing, titleOverride, extraValues = {}) {
   const row = new Array(headers.length).fill('');
   const set = (i, v) => {
     if (i >= 0) row[i] = v;
@@ -303,7 +303,7 @@ function buildRowFromThing(headers, idx, thing, titleOverride, extraValues = {})
 // Appends one row to the sheet via a user-deployed Google Apps Script Web App (see the in-page
 // setup help for the script). `text/plain` avoids a CORS preflight that a plain Apps Script
 // deployment doesn't answer; Apps Script still reads the JSON body fine either way.
-async function appendRowViaScript(scriptUrl, row) {
+export async function appendRowViaScript(scriptUrl, row) {
   const res = await fetch(scriptUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -320,11 +320,5 @@ async function appendRowViaScript(scriptUrl, row) {
   return true;
 }
 
-const bggGameUrl = (id) => `https://boardgamegeek.com/boardgame/${id}`;
-const bggCollectionUrl = (username) => `https://boardgamegeek.com/collection/user/${encodeURIComponent(username.trim())}`;
-
-module.exports = {
-  CANONICAL, fetchSheetCsv, parseCsv, buildHeaderIndex, extraHeaders, distinctValues, filterRows, sortEntries,
-  bggSearch, bggThing, bggFindCandidates, bggOwnedCollection, missingFromSheet, buildRowFromThing,
-  appendRowViaScript, bggGameUrl, bggCollectionUrl, cellAt, cleanQuery, modesFromLinks, matchKey,
-};
+export const bggGameUrl = (id) => `https://boardgamegeek.com/boardgame/${id}`;
+export const bggCollectionUrl = (username) => `https://boardgamegeek.com/collection/user/${encodeURIComponent(username.trim())}`;
