@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hocus Pocus Online</title>
+  <meta name="description" content="Play the Hocus Pocus cooperative card game online with a friend.">
+  <meta name="theme-color" content="#faf5dd">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
+  <script src="cards.js" defer></script>
+  <script src="game.js" defer></script>
+  <script src="net.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main id="home" class="screen">
+    <a class="back" href="../">&larr; Back to the site</a>
+    <div class="brand">
+      <h1>Hocus Pocus</h1>
+      <p>The cooperative potion game, online with a friend</p>
+    </div>
+    <div class="stack">
+      <label class="field"><span>Your name</span>
+        <input id="nameInput" class="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
+      </label>
+      <button id="createBtn" class="btn primary big">Create a game</button>
+      <div class="divider">or join a friend's game</div>
+      <form id="joinForm" class="join">
+        <input id="codeInput" class="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+        <button class="btn primary" type="submit">Join</button>
+      </form>
+      <button id="resumeBtn" class="btn" hidden></button>
+    </div>
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>You and your friend play <b>together</b> against the Sanderson sisters. There's no losing to each other — you both win, or both lose.</li>
+        <li>5 Ingredient piles sit in the cauldron. Each turn: <b>ask</b> a yes/no question about a color or an ingredient type in the other player's hand, then optionally use a one-time <b>Trick</b>, then <b>play</b> a card from your hand onto a pile it matches by color or by type (or say you can't, which draws a Spell).</li>
+        <li>If all 5 piles ever show the <b>same color</b>, <b>Sarah</b> is stunned. All same <b>type</b> stuns <b>Mary</b> — unless the 5 piles are also all different colors, which stuns <b>Winifred</b> instead. A stunned witch's Spells miss until the next stun.</li>
+        <li><b>3 stuns</b> and the sun rises — you win! Drawing a Spell that forces you to draw more cards than are left in the deck ends the game as a loss.</li>
+        <li>Special cards: the <b>Spell Book</b> symbol draws a Spell immediately; <b>Binx</b> reveals a hand (yours or your friend's, your choice) until the next stun.</li>
+      </ul>
+      <p class="note">The deck size, colors, ingredient types, special symbols, Tricks, and win/lose conditions follow the official rulebook. The exact text of all 13 Spell cards and the cauldron's starting pairs aren't spelled out there, so those are this app's own reasonable design.</p>
+    </details>
+  </main>
+
+  <main id="lobby" class="screen lobby" hidden>
+    <p class="eyebrow">Room code</p>
+    <div id="lobbyCode" class="code"></div>
+    <p id="lobbyMsg"></p>
+    <div class="row">
+      <button id="shareBtn" class="btn primary">Share invite</button>
+      <button id="copyBtn" class="btn">Copy link</button>
+    </div>
+    <button id="cancelBtn" class="btn ghost">Cancel</button>
+  </main>
+
+  <main id="game" class="screen" hidden>
+    <header class="topbar">
+      <div class="room"><span id="netDot" class="dot"></span>Room <b id="roomCode"></b></div>
+      <button id="leaveBtn" class="btn ghost">Leave</button>
+    </header>
+    <div id="netBanner" class="banner" hidden></div>
+
+    <section class="panel">
+      <div id="suns" class="suns"></div>
+      <div id="witches" class="witches"></div>
+      <div id="scoreboard" class="scoreboard"></div>
+      <div id="oppHand" class="opphand" aria-hidden="true"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">The cauldron</span><span id="cauldronInfo" class="hint"></span></div>
+      <div id="cauldron" class="cauldron"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Your hand</span><span id="handInfo" class="hint"></span></div>
+      <div id="hand" class="hand"></div>
+      <div id="tricks" class="tricks"></div>
+    </section>
+
+    <p id="lastTurn" class="last"></p>
+
+    <div id="bar" class="bar" aria-live="polite">
+      <p id="status" class="status"></p>
+      <div id="spellcard"></div>
+      <div id="actions" class="actions"></div>
+    </div>
+  </main>
+
+  <dialog id="overDialog">
+    <div class="result">
+      <h2 id="overTitle"></h2>
+      <p id="overWhy" class="why"></p>
+      <div class="row">
+        <button id="nextBtn" class="btn primary">Play again</button>
+        <button id="closeOverBtn" class="btn">View table</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
