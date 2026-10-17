@@ -276,10 +276,16 @@
       `<span class="emoji">${EMOJI[card.type]}</span><span class="label">${esc(C.TYPE_NAMES[card.type])}</span>${badge ? `<span class="badge">${badge}</span>` : ''}</${tag}>`;
   }
 
+  const RING_RADIUS = 34; // % of the cauldron box, measured from its centre
+  const CAULDRON_ART = '<svg class="pot" viewBox="0 0 120 120" aria-hidden="true">' +
+    '<rect x="34" y="92" width="9" height="14" rx="3" fill="#2b2631"/><rect x="77" y="92" width="9" height="14" rx="3" fill="#2b2631"/>' +
+    '<path d="M16 52 Q16 98 60 98 Q104 98 104 52 Z" fill="#2b2631"/><ellipse cx="60" cy="52" rx="44" ry="11" fill="#2b2631"/>' +
+    '<ellipse cx="60" cy="48" rx="35" ry="7" fill="#5a9a5a"/></svg>';
+
   function topCardHtml(s, pile) {
     const top = G.pileTop(s, pile);
     const empty = s.cauldron[pile].length === 0;
-    const cls = ['icard', 'mini', COLOR_CLASS[top.color], empty && 'start'].filter(Boolean).join(' ');
+    const cls = ['icard', COLOR_CLASS[top.color], empty && 'start'].filter(Boolean).join(' ');
     return `<div class="${cls}"><span class="emoji">${EMOJI[top.type]}</span><span class="label">${esc(C.TYPE_NAMES[top.type])}</span></div>`;
   }
 
@@ -322,11 +328,15 @@
     let hint = '';
     if (canPick) hint = 'tap a pile to play it there';
     $('cauldronInfo').textContent = hint;
-    let html = '';
+    // The five piles sit evenly around a ring, starting at the top and going clockwise.
+    let html = CAULDRON_ART;
     for (let pile = 0; pile < 5; pile++) {
       const pickable = canPick && G.canPlayOn(s, app.selCard, pile);
       const top = G.pileTop(s, pile);
-      html += `<div class="cpile${pickable ? ' pickable' : ''}" data-pile="${pile}">` +
+      const angle = ((-90 + pile * 72) * Math.PI) / 180;
+      const left = 50 + RING_RADIUS * Math.cos(angle);
+      const topPct = 50 + RING_RADIUS * Math.sin(angle);
+      html += `<div class="cpile${pickable ? ' pickable' : ''}" data-pile="${pile}" style="left:${left.toFixed(2)}%;top:${topPct.toFixed(2)}%">` +
         topCardHtml(s, pile) +
         `<small>${esc(C.COLOR_NAMES[top.color])}</small></div>`;
     }
@@ -403,13 +413,8 @@
       status = 'Game over';
       actions = btn('results', 'See results', 'primary');
     } else if (!myTurn) {
-      const verbs = { ask: 'asking a question', trick: 'deciding on a Trick', play: 'playing a card', spell: 'dealing with a Spell' };
+      const verbs = { trick: 'deciding on a Trick', play: 'playing a card', spell: 'dealing with a Spell' };
       status = `${oppName} is ${verbs[s.phase] || 'playing'}…`;
-    } else if (s.phase === 'ask') {
-      status = 'Ask a yes/no question about a color or an ingredient.';
-      const colorRow = C.COLORS.map((c) => `<button class="btn small" data-ask-kind="color" data-ask-value="${c}">${esc(C.COLOR_NAMES[c])}</button>`).join('');
-      const typeRow = C.TYPES.map((t) => `<button class="btn small" data-ask-kind="type" data-ask-value="${t}">${EMOJI[t]} ${esc(C.TYPE_NAMES[t])}</button>`).join('');
-      actions = `<div class="askgrid"><div class="askrow">${colorRow}</div><div class="askrow">${typeRow}</div></div>`;
     } else if (s.phase === 'trick') {
       if (app.trickMode === 'burning') {
         status = `Pick exactly 3 cards to discard (${app.selMulti.length}/3), then confirm.`;
@@ -639,11 +644,6 @@
   });
 
   $('bar').addEventListener('click', (e) => {
-    const ask = e.target.closest('[data-ask-kind]');
-    if (ask) {
-      act({ type: 'ask', kind: ask.dataset.askKind, value: ask.dataset.askValue });
-      return;
-    }
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const a = b.dataset.act;

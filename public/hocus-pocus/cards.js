@@ -61,15 +61,15 @@
   // Each Trick token's exact effect and timing, per the rulebook.
   const TRICKS = {
     salt: { name: 'Circle of Salt', text: 'When a Spell is drawn, ignore it — discard it and do not draw another.' },
-    daylight: { name: 'Daylight Savings Time', text: "After asking, before playing: swap one card with the other player's hand." },
-    billy: { name: 'Billy Butcherson', text: "After asking, before playing: skip playing a card this turn. You don't draw at the end either." },
-    burning: { name: 'Burning Rain of Death', text: 'After asking, before playing: discard 3 cards and draw 3 replacements, then play and draw as normal.' },
+    daylight: { name: 'Daylight Savings Time', text: "Before playing a card: swap one card with the other player's hand." },
+    billy: { name: 'Billy Butcherson', text: "Before playing a card: skip playing a card this turn. You don't draw at the end either." },
+    burning: { name: 'Burning Rain of Death', text: 'Before playing a card: discard 3 cards and draw 3 replacements, then play and draw as normal.' },
   };
 
   // My own 13-spell set (see the file header): 4 per witch, plus one "all three" spell that's
   // never ignored even when a witch is stunned. Every effect is a short, clearly-defined hindrance.
   const SPELLS = [
-    { id: 's1', witch: 'sarah', name: "Sarah's Whisper", effect: 'blockAsk', text: 'No one may ask a question until another Spell is cast.' },
+    { id: 's1', witch: 'sarah', name: "Sarah's Whisper", effect: 'blockTricks', text: 'No Tricks may be used until another Spell is cast.' },
     { id: 's2', witch: 'sarah', name: 'Bewitched', effect: 'discard', amount: 1, text: 'Discard 1 card, then draw 1 to replace it.' },
     { id: 's3', witch: 'sarah', name: 'Black Flame', effect: 'revealHand', text: "The active player's hand is revealed until the round ends." },
     { id: 's4', witch: 'sarah', name: 'Moonlit Flight', effect: 'loseBinx', text: 'Binx is removed from play immediately.' },
@@ -79,7 +79,7 @@
     { id: 's8', witch: 'mary', name: 'Sisterly Spat', effect: 'swapRandom', text: "Swap a random card between the active player's hand and the other player's." },
     { id: 's9', witch: 'winifred', name: "Winifred's Wrath", effect: 'discard', amount: 3, text: 'Discard 3 cards, then draw 3 to replace them.' },
     { id: 's10', witch: 'winifred', name: 'Book of Spells', effect: 'extraSpell', text: 'Immediately draw and resolve one more Spell.' },
-    { id: 's11', witch: 'winifred', name: 'Cease thy Prattle', effect: 'blockAsk', text: 'No one may ask a question until another Spell is cast.' },
+    { id: 's11', witch: 'winifred', name: 'Cease thy Prattle', effect: 'blockTricks', text: 'No Tricks may be used until another Spell is cast.' },
     { id: 's12', witch: 'winifred', name: 'One Last Death', effect: 'skipPlay', text: 'The active player skips playing this turn (they still draw at the end).' },
     { id: 's13', witch: null, name: 'Take Flight', effect: 'discard', amount: 2, text: 'All three witches cast this together — it is never blocked by a stun. Discard 2, draw 2.' },
   ];

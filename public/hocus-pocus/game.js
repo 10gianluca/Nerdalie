@@ -70,14 +70,13 @@
       stunnedWitch: null,
       sun: 0,
       tricksUsed: { salt: false, daylight: false, billy: false, burning: false },
-      blockAsk: false,
+      blockTricks: false,
       skipPlayThisTurn: false,
       starter,
       active: starter,
       round: 1,
       turn: 1,
-      phase: 'ask',
-      lastAsk: null,
+      phase: 'trick',
       pendingDiscard: null, // { min, max, reason: 'cantPlay' | 'spell' }
       pendingSpell: null, // a drawn spell awaiting a Circle-of-Salt decision
       justStunned: false,
@@ -92,8 +91,8 @@
   }
 
   function beginTurn(s) {
-    s.phase = s.blockAsk ? 'trick' : 'ask';
-    if (s.blockAsk) log(s, 'Asking is still blocked by a spell — no question this turn.');
+    s.phase = s.blockTricks ? 'play' : 'trick';
+    if (s.blockTricks) log(s, 'Tricks are still blocked by a spell — no Trick this turn.');
   }
 
   // A mandatory draw of `n` cards (for a discard-and-replace step). If the deck can't supply them
@@ -120,10 +119,10 @@
 
   function resolveSpellEffect(s, seat, spell) {
     log(s, `Spell: ${spell.name} — ${spell.text}`);
-    if (s.blockAsk) s.blockAsk = false; // "another Spell is cast" ends the standing block
+    if (s.blockTricks) s.blockTricks = false; // "another Spell is cast" ends the standing block
     switch (spell.effect) {
-      case 'blockAsk':
-        s.blockAsk = true;
+      case 'blockTricks':
+        s.blockTricks = true;
         break;
       case 'revealHand':
         s.binxHolder = seat;
@@ -212,7 +211,7 @@
     s.sun++;
     log(s, `${C.WITCH_NAMES[witch]} is stunned! The sun climbs (${s.sun}/${RULES.stunsToWin}).`);
     s.stunnedWitch = witch;
-    s.blockAsk = false; // ongoing Spell effects end immediately
+    s.blockTricks = false; // ongoing Spell effects end immediately
     if (s.sun >= RULES.stunsToWin) {
       s.phase = 'over';
       s.end = { result: 'win' };
@@ -243,18 +242,6 @@
     const me = s.players[player];
 
     switch (action.type) {
-      case 'ask': {
-        if (s.phase !== 'ask') fail('You cannot ask right now');
-        if (!['color', 'type'].includes(action.kind)) fail('Ask about a color or a type');
-        const list = action.kind === 'color' ? COLORS : TYPES;
-        if (!list.includes(action.value)) fail('Not a real ' + action.kind);
-        const theirHand = s.players[other(player)].hand.map((id) => s.index[id]);
-        const answer = theirHand.some((c) => c[action.kind] === action.value);
-        s.lastAsk = { kind: action.kind, value: action.value, answer };
-        log(s, `${me.name} asks: who has ${action.kind === 'color' ? C.COLOR_NAMES[action.value] : C.TYPE_NAMES[action.value]}? ${s.players[other(player)].name} says ${answer ? 'yes' : 'no'}.`);
-        s.phase = 'trick';
-        break;
-      }
       case 'skipTrick':
         if (s.phase !== 'trick') fail('Nothing to skip here');
         s.phase = 'play';

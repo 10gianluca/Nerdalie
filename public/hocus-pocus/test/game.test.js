@@ -38,7 +38,7 @@ test('setup: 50 cards total, 4 dealt to each player, 10 special (5 binx + 5 book
   assert.equal(all.filter((c) => c.special === 'binx').length, 5);
   assert.equal(all.filter((c) => c.special === 'book').length, 5);
   assert.equal(new Set(all.map((c) => c.id)).size, 50, 'every id is unique');
-  assert.equal(s.phase, 'ask');
+  assert.equal(s.phase, 'trick');
   assert.equal(s.active, 0);
 });
 
@@ -80,27 +80,17 @@ test('checkStun: all 5 same colour -> Sarah; all same type, all different colour
   assert.equal(G.checkStun(s), null);
 });
 
-test('ask: answers truthfully about the OTHER player\'s hand, never reveals more, then moves to trick phase', () => {
+test('there is no question step: every turn opens on the trick choice, and "ask" is not an action', () => {
   const s = G.newGame(['Ana', 'Ben'], 0);
-  const theirColors = new Set(s.players[1].hand.map((id) => s.index[id].color));
-  const have = [...theirColors][0];
-  const dontHave = C.COLORS.find((c) => !theirColors.has(c));
-  const a = G.apply(s, 0, { type: 'ask', kind: 'color', value: have });
-  assert.equal(a.lastAsk.answer, true);
-  assert.equal(a.phase, 'trick');
-  if (dontHave) {
-    const b = G.apply(s, 0, { type: 'ask', kind: 'color', value: dontHave });
-    assert.equal(b.lastAsk.answer, false);
-  }
-  assert.throws(() => G.apply(s, 1, { type: 'ask', kind: 'color', value: have }), /not your turn/);
-  assert.throws(() => G.apply(s, 0, { type: 'ask', kind: 'nope', value: have }), /color or a type/);
+  assert.equal(s.phase, 'trick');
+  assert.equal('lastAsk' in s, false);
+  assert.throws(() => G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), /Unknown action/);
 });
 
-test('a full legal play: ask -> skip trick -> play -> draw -> turn passes', () => {
+test('a full legal play: skip trick -> play -> draw -> turn passes', () => {
   const s = freshGame((st) => G.legalPlays(st, 0).length > 0 && G.legalPlays(st, 0).some((m) => !s_specialCard(st, m.cardId)));
   function s_specialCard(st, id) { return !!st.index[id].special; }
-  let g = G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] });
-  g = G.apply(g, 0, { type: 'skipTrick' });
+  let g = G.apply(s, 0, { type: 'skipTrick' });
   const move = G.legalPlays(g, 0).find((m) => !g.index[m.cardId].special);
   const before = g.players[0].hand.length;
   g = G.apply(g, 0, { type: 'play', cardId: move.cardId, pile: move.pile });
@@ -108,19 +98,18 @@ test('a full legal play: ask -> skip trick -> play -> draw -> turn passes', () =
   assert.equal(g.players[0].hand.length, before, 'played 1, drew 1: net unchanged');
   assert.equal(g.active, 1);
   assert.equal(g.turn, 2);
-  assert.equal(g.phase, 'ask');
+  assert.equal(g.phase, 'trick');
 });
 
 test('you must play a legal card if you have one: "cannotPlay" is refused', () => {
   const s = freshGame((st) => G.legalPlays(st, 0).length > 0);
-  const g1 = G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] });
-  const g2 = G.apply(g1, 0, { type: 'skipTrick' });
+  const g2 = G.apply(s, 0, { type: 'skipTrick' });
   assert.throws(() => G.apply(g2, 0, { type: 'cannotPlay' }), /do have a legal play/);
 });
 
 test('a card matching neither any pile fails with a clear reason', () => {
   const s = freshGame((st) => G.legalPlays(st, 0).length > 0);
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const bad = g1.players[0].hand.find((id) => !G.legalPlays(g1, 0).some((m) => m.cardId === id));
   if (bad) assert.throws(() => G.apply(g1, 0, { type: 'play', cardId: bad, pile: 0 }), /match/);
 });
@@ -135,7 +124,7 @@ test("can't play: a Spell is cast and resolves, then discard (at least 1, your c
     x3: { type: 'zz', color: 'zz', special: null }, x4: { type: 'zz', color: 'zz', special: null },
   };
   s.spellDeck = ['s2']; // "Bewitched": discard 1, draw 1 — deterministic, not whatever was shuffled in
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   assert.equal(G.legalPlays(g1, 0).length, 0);
   const g2 = G.apply(g1, 0, { type: 'cannotPlay' });
   assert.equal(g2.phase, 'spell');
@@ -158,15 +147,15 @@ test('Circle of Salt cancels a drawn Spell entirely: no effect, no redraw, one-t
   let s = G.newGame(['Ana', 'Ben'], 0);
   s.players[0].hand = ['x1', 'x2', 'x3', 'x4'];
   s.index = { ...s.index, x1: { type: 'zz', color: 'zz' }, x2: { type: 'zz', color: 'zz' }, x3: { type: 'zz', color: 'zz' }, x4: { type: 'zz', color: 'zz' } };
-  let g = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  let g = G.apply(s, 0, { type: 'skipTrick' });
   g = G.apply(g, 0, { type: 'cannotPlay' });
   assert.equal(g.phase, 'spell');
   const before = JSON.stringify(g.players[0].hand);
   g = G.apply(g, 0, { type: 'useTrick', trick: 'salt' });
   assert.equal(g.tricksUsed.salt, true);
-  assert.equal(g.phase, 'ask', 'the spell was ignored, so the turn just moved on (drew 1, passed)');
+  assert.equal(g.phase, 'trick', 'the spell was ignored, so the turn just moved on (drew 1, passed)');
   assert.notEqual(g.active, 0);
-  assert.throws(() => G.apply(G.apply(G.apply(g, 1, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 1, { type: 'skipTrick' }), 1, { type: 'useTrick', trick: 'salt' }), /already been used/);
+  assert.throws(() => G.apply(G.apply(g, 1, { type: 'skipTrick' }), 1, { type: 'useTrick', trick: 'salt' }), /already been used/);
 });
 
 test('a Spell matching the currently-stunned witch misses: no effect, no redraw', () => {
@@ -175,9 +164,9 @@ test('a Spell matching the currently-stunned witch misses: no effect, no redraw'
   s.index = { ...s.index, x1: { type: 'zz', color: 'zz' }, x2: { type: 'zz', color: 'zz' }, x3: { type: 'zz', color: 'zz' }, x4: { type: 'zz', color: 'zz' } };
   s.spellDeck = ['s2']; // "Bewitched" (Sarah) — would normally offer a discard-1 effect
   s.stunnedWitch = 'sarah';
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'cannotPlay' });
-  assert.equal(g2.phase, 'ask', 'the spell missed outright: no salt offer, no discard step, turn just continued');
+  assert.equal(g2.phase, 'trick', 'the spell missed outright: no salt offer, no discard step, turn just continued');
   assert.equal(g2.pendingSpell, null);
   assert.equal(g2.pendingDiscard, null);
   assert.equal(g2.players[0].hand.length, 5, '4 in hand, no discard/redraw, +1 end-of-turn draw');
@@ -190,7 +179,7 @@ test('"Take Flight" (no single witch) is never missed, even while that exact wit
   s.index = { ...s.index, x1: { type: 'zz', color: 'zz' }, x2: { type: 'zz', color: 'zz' }, x3: { type: 'zz', color: 'zz' }, x4: { type: 'zz', color: 'zz' } };
   s.spellDeck = ['s13']; // Take Flight: witch === null, so it can never match a stunned witch
   s.stunnedWitch = 'sarah';
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'cannotPlay' });
   assert.equal(g2.phase, 'spell');
   assert.equal(g2.pendingSpell.id, 's13', 'it was offered normally, not missed');
@@ -203,10 +192,10 @@ test('playing the Spell Book symbol draws a Spell as part of that same play (not
   });
   const bookId = Object.keys(s.index).find((id) => s.index[id].special === 'book' && s.players[0].hand.includes(id));
   const move = G.legalPlays(s, 0).find((m) => m.cardId === bookId);
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'play', cardId: bookId, pile: move.pile });
   assert.deepEqual(g2.cauldron[move.pile], [bookId], 'the card was placed');
-  assert.ok(g2.phase === 'spell' || g2.phase === 'ask', 'a spell was drawn and either awaits salt or already resolved/missed');
+  assert.ok(g2.phase === 'spell' || g2.phase === 'trick', 'a spell was drawn and either awaits salt or already resolved/missed');
 });
 
 test('Binx: playing it reveals a hand; the other player can see it through viewFor; it clears at round end', () => {
@@ -216,7 +205,7 @@ test('Binx: playing it reveals a hand; the other player can see it through viewF
   });
   const binxId = Object.keys(s.index).find((id) => s.index[id].special === 'binx' && s.players[0].hand.includes(id));
   const move = G.legalPlays(s, 0).find((m) => m.cardId === binxId);
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'play', cardId: binxId, pile: move.pile, binxTo: 0 });
   assert.equal(g2.binxHolder, 0);
   const seenByOther = G.viewFor(g2, 1);
@@ -246,11 +235,11 @@ test('round end: 1st stun does not end the game; sun count increases; deck shrin
   const last = mk(5, 'fifth', 'orange'); // matches pile 4's current top by type, completes by colour
   s.players[0].hand = [last];
   const deckBefore = s.deck.length;
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'play', cardId: last, pile: 4 });
   assert.equal(g2.sun, 1);
   assert.equal(g2.stunnedWitch, 'sarah');
-  assert.equal(g2.phase, 'ask', 'not over: 1 stun < 3 needed');
+  assert.equal(g2.phase, 'trick', 'not over: 1 stun < 3 needed');
   assert.deepEqual(g2.cauldron, [[], [], [], [], []], 'the cauldron is cleared for the new round');
   assert.equal(g2.discard.length, 0);
   assert.equal(g2.removed.length, 7, 'the 6 cauldron cards (pile 4 held 2) + 1 discard card are gone for good (none were special)');
@@ -265,7 +254,7 @@ test('round end recycles special (binx/book) cards from the cauldron/discard bac
   s.cauldron = [[mk(1, 't1', 'orange')], [mk(2, 't2', 'orange')], [mk(3, 't3', 'orange', 'binx')], [mk(4, 't4', 'orange')], [mk(0, 'fifth', 'purple')]];
   const last = mk(5, 'fifth', 'orange', 'book'); // completes the stun, so its own Book symbol never fires
   s.players[0].hand = [last];
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'play', cardId: last, pile: 4 });
   assert.equal(g2.removed.length, 4, 'only the 4 plain cards (m1, m2, m4, and the pre-existing m0) are gone for good');
   assert.ok(!g2.removed.includes('m3') && !g2.removed.includes(last), 'the two specials were not removed');
@@ -282,7 +271,7 @@ test('three total stuns (any mix of witches) ends the game as a win, with the su
   s.cauldron = [[mk(1, 't1', 'orange')], [mk(2, 't2', 'orange')], [mk(3, 't3', 'orange')], [mk(4, 't4', 'orange')], [mk(0, 'fifth', 'purple')]];
   const last = mk(5, 'fifth', 'orange');
   s.players[0].hand = [last];
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'play', cardId: last, pile: 4 });
   assert.equal(g2.sun, 3);
   assert.equal(g2.phase, 'over');
@@ -295,10 +284,10 @@ test('stunning while playing a Special card ignores its symbol entirely: no spel
   s.cauldron = [[mk(1, 't1', 'orange')], [mk(2, 't2', 'orange')], [mk(3, 't3', 'orange')], [mk(4, 't4', 'orange')], [mk(0, 'fifth', 'purple')]];
   const last = mk(5, 'fifth', 'orange', 'book'); // would normally draw a spell — but it completes a stun first
   s.players[0].hand = [last];
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const g2 = G.apply(g1, 0, { type: 'play', cardId: last, pile: 4 });
   assert.equal(g2.sun, 1);
-  assert.equal(g2.phase, 'ask', 'straight back to a fresh turn: no spell/salt step happened');
+  assert.equal(g2.phase, 'trick', 'straight back to a fresh turn: no spell/salt step happened');
 });
 
 test('a forced draw (discard-and-replace) that the deck cannot fulfil ends the game as a loss', () => {
@@ -314,7 +303,7 @@ test('a forced draw (discard-and-replace) that the deck cannot fulfil ends the g
 test('a plain end-of-turn draw with an empty deck is not a loss: play just continues', () => {
   const s = freshGame((st) => G.legalPlays(st, 0).length > 0 && G.legalPlays(st, 0).some((m) => !st.index[m.cardId].special));
   s.deck = [];
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' });
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
   const move = G.legalPlays(g1, 0).find((m) => !g1.index[m.cardId].special);
   const g2 = G.apply(g1, 0, { type: 'play', cardId: move.cardId, pile: move.pile });
   assert.notEqual(g2.phase, 'over');
@@ -325,8 +314,7 @@ test('Billy Butcherson: skips the play step AND the end-of-turn draw, one-time u
   const s = G.newGame(['Ana', 'Ben'], 0);
   const handBefore = s.players[0].hand.length;
   const deckBefore = s.deck.length;
-  const g1 = G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] });
-  const g2 = G.apply(g1, 0, { type: 'useTrick', trick: 'billy' });
+  const g2 = G.apply(s, 0, { type: 'useTrick', trick: 'billy' });
   assert.equal(g2.players[0].hand.length, handBefore, 'no card played, no card drawn');
   assert.equal(g2.deck.length, deckBefore);
   assert.equal(g2.active, 1);
@@ -336,7 +324,7 @@ test('Billy Butcherson: skips the play step AND the end-of-turn draw, one-time u
 test('Daylight Savings Time: active player offers a card, gets a random one back from the other hand', () => {
   const s = G.newGame(['Ana', 'Ben'], 0);
   const give = s.players[0].hand[0];
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'useTrick', trick: 'daylight', give });
+  const g1 = G.apply(s, 0, { type: 'useTrick', trick: 'daylight', give });
   assert.equal(g1.players[0].hand.includes(give), false, 'the offered card left the active hand');
   assert.equal(g1.players[1].hand.includes(give), true, 'and landed in the other hand');
   assert.equal(g1.players[0].hand.length, 4);
@@ -348,12 +336,12 @@ test('Burning Rain of Death: discards exactly 3, draws 3, then play proceeds as 
   const s = G.newGame(['Ana', 'Ben'], 0);
   const discard = s.players[0].hand.slice(0, 3);
   const deckBefore = s.deck.length;
-  const g1 = G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'useTrick', trick: 'burning', discard });
+  const g1 = G.apply(s, 0, { type: 'useTrick', trick: 'burning', discard });
   assert.equal(g1.players[0].hand.length, 4);
   assert.equal(g1.deck.length, deckBefore - 3);
   assert.ok(discard.every((c) => !g1.players[0].hand.includes(c)));
   assert.equal(g1.phase, 'play');
-  assert.throws(() => G.apply(G.apply(G.apply(s, 0, { type: 'ask', kind: 'color', value: C.COLORS[0] }), 0, { type: 'skipTrick' }), 0, { type: 'useTrick', trick: 'burning', discard }), /before you play/);
+  assert.throws(() => G.apply(G.apply(s, 0, { type: 'skipTrick' }), 0, { type: 'useTrick', trick: 'burning', discard }), /before you play/);
 });
 
 test('rematch alternates the starting player and deals a brand new game', () => {
@@ -371,5 +359,23 @@ test('rematch alternates the starting player and deals a brand new game', () => 
 
 test('only the active player may act', () => {
   const s = G.newGame(['Ana', 'Ben'], 0);
-  assert.throws(() => G.apply(s, 1, { type: 'ask', kind: 'color', value: C.COLORS[0] }), /not your turn/);
+  assert.throws(() => G.apply(s, 1, { type: 'skipTrick' }), /not your turn/);
+});
+
+test('a "no Tricks" spell skips the trick choice on the next turn, and the next Spell lifts it', () => {
+  const s = G.newGame(['Ana', 'Ben'], 0);
+  const blocker = C.SPELLS.find((sp) => sp.effect === 'blockTricks');
+  s.phase = 'spell';
+  s.pendingSpell = blocker;
+  const g = G.apply(s, 0, { type: 'continueFromSpell' });
+  assert.equal(g.blockTricks, true);
+  assert.equal(g.active, 1);
+  assert.equal(g.phase, 'play', 'no trick step while the block stands');
+  assert.throws(() => G.apply(g, 1, { type: 'useTrick', trick: 'billy' }), /before you play/);
+  const other = C.SPELLS.find((sp) => sp.effect === 'skipPlay');
+  g.phase = 'spell';
+  g.pendingSpell = other;
+  const g2 = G.apply(g, 1, { type: 'continueFromSpell' });
+  assert.equal(g2.blockTricks, false, 'casting another Spell ends the block');
+  assert.equal(g2.phase, 'trick');
 });
