@@ -7,13 +7,13 @@
 
 :root {
   color-scheme: light;
-  --bg: #faf5dd; /* the site's cream */
-  --surface: #fffdf2;
-  --ink: #2b2631;
-  --muted: #6b6475;
-  --line: #e6dcb8;
-  --accent: #a83f39; /* the site's red */
-  --on-accent: #faf5dd;
+  --bg: #f6f3ea; /* score-pad paper */
+  --surface: #fffef8;
+  --ink: #22304f; /* pen blue */
+  --muted: #66708a;
+  --line: #d3dcec;
+  --accent: #d1453b; /* red pencil */
+  --on-accent: #fff7ec;
   --good: #2f8f5b;
   --bad: #c2412d;
   --orange: #ee7a2b;
@@ -22,8 +22,8 @@
   --yellow-soft: #fbefc2;
   --purple: #6a4c9c;
   --purple-soft: #e6ddf3;
-  --cell-bg: #fffdf2;
-  --shadow: 0 1px 2px rgb(40 30 20 / 0.08), 0 6px 20px rgb(40 30 20 / 0.06);
+  --cell-bg: #fffef8;
+  --shadow: 0 1px 2px rgb(34 48 79 / 0.1), 0 6px 18px rgb(34 48 79 / 0.08);
   --radius: 16px;
   font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
 }
@@ -89,8 +89,8 @@ input.text:focus { border-color: var(--ink); }
 .join .btn { flex-shrink: 0; }
 .solo { display: grid; gap: 10px; }
 .levels { display: flex; gap: 8px; }
-.levels .chip { flex: 1; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.55rem 0.5rem; font-weight: 700; cursor: pointer; }
-.levels .chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.levels .lvl { flex: 1; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.55rem 0.5rem; font-weight: 700; cursor: pointer; }
+.levels .lvl.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 
 .rules { margin-top: 18px; background: var(--surface); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .rules summary { font-weight: 700; cursor: pointer; }
@@ -242,3 +242,31 @@ dialog::backdrop { background: rgb(20 15 25 / 0.45); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- theme: the score pad ---------- */
+body {
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(rgb(60 100 170 / 0.13) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(60 100 170 / 0.13) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.brand h1 { text-shadow: 3px 3px 0 var(--yellow), 5px 5px 0 rgb(34 48 79 / 0.18); }
+.brand h1::before, .brand h1::after { font-size: 0.5em; vertical-align: 0.35em; text-shadow: none; display: inline-block; }
+.brand h1::before { content: '🎲'; transform: rotate(-14deg); margin-right: 0.15em; }
+.brand h1::after { content: '🎲'; transform: rotate(12deg); margin-left: 0.15em; }
+.card, .rules {
+  border: 2px solid var(--ink); box-shadow: 4px 4px 0 rgb(34 48 79 / 0.2);
+}
+.card {
+  padding-top: 18px;
+  background: linear-gradient(90deg, var(--orange) 0 33.33%, var(--yellow) 33.33% 66.66%, var(--purple) 66.66%) top / 100% 6px no-repeat, var(--surface);
+}
+.btn { border: 2px solid var(--ink); }
+.btn.ghost { border-color: transparent; }
+.btn.primary { border-color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+.btn.primary:active { box-shadow: 1px 1px 0 var(--ink); transform: translate(2px, 2px); }
+.levels .lvl { border: 2px solid var(--ink); }
+input.text { border: 2px solid var(--ink); }
+dialog { border: 2px solid var(--ink); box-shadow: 6px 6px 0 rgb(34 48 79 / 0.25), 0 20px 60px rgb(0 0 0 / 0.3); }
+#roomCode { text-transform: capitalize; }

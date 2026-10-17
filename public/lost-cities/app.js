@@ -206,7 +206,7 @@
   function initLevels() {
     const saved = store.get(LEVEL_KEY);
     const current = LEVELS.includes(saved) ? saved : 'normal';
-    const chips = document.querySelectorAll('.levels .chip');
+    const chips = document.querySelectorAll('.levels .lvl');
     for (const chip of chips) {
       chip.classList.toggle('on', chip.dataset.level === current);
       chip.addEventListener('click', () => {
@@ -217,7 +217,7 @@
   }
 
   const chosenLevel = () => {
-    const on = document.querySelector('.levels .chip.on');
+    const on = document.querySelector('.levels .lvl.on');
     return on ? on.dataset.level : 'normal';
   };
 

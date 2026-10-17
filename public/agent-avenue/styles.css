@@ -6,19 +6,19 @@
 }
 
 :root {
-  color-scheme: light;
-  --bg: #faf5dd; /* the site's cream */
-  --surface: #fffdf2;
-  --ink: #2b2631;
-  --muted: #6b6475;
-  --line: #e6dcb8;
-  --accent: #a83f39; /* the site's red */
-  --on-accent: #faf5dd;
-  --good: #2f8f5b;
-  --bad: #c2412d;
-  --me: #a83f39;
-  --them: #2b6c8f;
-  --shadow: 0 1px 2px rgb(40 30 20 / 0.08), 0 6px 20px rgb(40 30 20 / 0.06);
+  color-scheme: dark;
+  --bg: #10151e; /* night city */
+  --surface: #1b2331;
+  --ink: #edf1f7;
+  --muted: #95a3b8;
+  --line: #2f3b50;
+  --accent: #ffc233; /* streetlight amber */
+  --on-accent: #10151e;
+  --good: #5ed39a;
+  --bad: #ff6b5e;
+  --me: #ff7a6e;
+  --them: #5ab4e5;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 22px rgb(0 0 0 / 0.4);
   --radius: 16px;
   font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
 }
@@ -63,8 +63,8 @@ input.text:focus { border-color: var(--ink); }
 .join .btn { flex-shrink: 0; }
 .solo { display: grid; gap: 10px; }
 .levels { display: flex; gap: 8px; }
-.levels .chip { flex: 1; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.55rem 0.5rem; font-weight: 700; cursor: pointer; }
-.levels .chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.levels .lvl { flex: 1; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.55rem 0.5rem; font-weight: 700; cursor: pointer; }
+.levels .lvl.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .rules { margin-top: 18px; background: var(--surface); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .rules summary { font-weight: 700; cursor: pointer; }
 .rules ul { margin: 10px 0 0; padding-left: 1.2rem; color: var(--muted); line-height: 1.5; }
@@ -176,3 +176,30 @@ dialog::backdrop { background: rgb(20 15 25 / 0.45); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- theme: spy noir ---------- */
+body {
+  background:
+    radial-gradient(ellipse 70% 55% at 50% -8%, rgb(255 194 51 / 0.2) 0, transparent 70%),
+    linear-gradient(180deg, #10151e, #0b0f16) fixed;
+}
+body::after {
+  content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: 110px; pointer-events: none; z-index: 0; opacity: 0.95;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='110' viewBox='0 0 320 110'%3E%3Cpath fill='%23070a10' d='M0 110 V70 h18 V50 h22 V78 h14 V38 h26 V62 h16 V30 h12 V18 h8 V30 h12 V66 h20 V46 h24 V80 h14 V56 h22 V34 h20 V72 h18 V52 h16 V84 h18 V70 h40 V110Z'/%3E%3Cg fill='%23ffc233' opacity='.55'%3E%3Crect x='24' y='58' width='3' height='4'/%3E%3Crect x='34' y='64' width='3' height='4'/%3E%3Crect x='86' y='46' width='3' height='4'/%3E%3Crect x='94' y='52' width='3' height='4'/%3E%3Crect x='148' y='60' width='3' height='4'/%3E%3Crect x='214' y='62' width='3' height='4'/%3E%3Crect x='248' y='44' width='3' height='4'/%3E%3Crect x='282' y='66' width='3' height='4'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom left;
+}
+.screen { position: relative; z-index: 1; }
+input.text::placeholder { color: var(--muted); opacity: 0.7; }
+.brand h1 { font-family: "Courier New", ui-monospace, Menlo, Consolas, monospace; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; font-size: 2.3rem; text-shadow: 0 0 18px rgb(255 194 51 / 0.45); }
+.brand::after { content: 'TOP SECRET'; display: inline-block; margin-top: 10px; border: 2px solid var(--bad); color: var(--bad); padding: 1px 10px; font: 800 0.72rem "Courier New", ui-monospace, monospace; letter-spacing: 0.28em; transform: rotate(-4deg); opacity: 0.85; }
+.panel, .rules { border: 1px solid var(--line); border-left: 4px solid var(--accent); }
+.area-head .name { font-family: "Courier New", ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.9rem; color: var(--accent); }
+.btn.primary { box-shadow: 0 0 0 3px rgb(255 194 51 / 0.2); }
+.levels .lvl.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.ic.lose { background: #000; box-shadow: 0 0 0 1px #8a94a6; }
+.acard .badge { background: var(--accent); color: var(--on-accent); }
+.acard.sel { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
+#track .space { fill: #151c28; }
+#track .center { fill: var(--accent); }
+.toast { background: var(--accent); color: var(--on-accent); }
+#track .space { stroke: #4a5c7a; }
+#roomCode { text-transform: capitalize; }

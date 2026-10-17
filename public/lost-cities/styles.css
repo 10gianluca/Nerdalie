@@ -7,16 +7,16 @@
 
 :root {
   color-scheme: light;
-  --bg: #faf5dd; /* the site's cream */
-  --surface: #fffdf2;
-  --ink: #2b2631;
-  --muted: #6b6475;
-  --line: #e6dcb8;
-  --accent: #a83f39; /* the site's red */
-  --on-accent: #faf5dd;
-  --good: #2f8f5b;
-  --bad: #c2412d;
-  --shadow: 0 1px 2px rgb(40 30 20 / 0.08), 0 6px 20px rgb(40 30 20 / 0.06);
+  --bg: #ead6a8; /* parchment */
+  --surface: #f8edd1;
+  --ink: #3b2a18;
+  --muted: #7b6544;
+  --line: #cdb687;
+  --accent: #a8431f; /* burnt sienna */
+  --on-accent: #fbf0d6;
+  --good: #3b7a4b;
+  --bad: #b3361f;
+  --shadow: 0 1px 2px rgb(60 40 15 / 0.16), 0 8px 18px rgb(60 40 15 / 0.12);
   --radius: 16px;
   font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', 'Segoe UI', system-ui, sans-serif;
 }
@@ -61,8 +61,8 @@ input.text:focus { border-color: var(--ink); }
 .join .btn { flex-shrink: 0; }
 .solo { display: grid; gap: 10px; }
 .levels { display: flex; gap: 8px; }
-.levels .chip { flex: 1; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.55rem 0.5rem; font-weight: 700; cursor: pointer; }
-.levels .chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.levels .lvl { flex: 1; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.55rem 0.5rem; font-weight: 700; cursor: pointer; }
+.levels .lvl.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .rules { margin-top: 18px; background: var(--surface); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .rules summary { font-weight: 700; cursor: pointer; }
 .rules ul { margin: 10px 0 0; padding-left: 1.2rem; color: var(--muted); line-height: 1.5; }
@@ -176,3 +176,34 @@ dialog::backdrop { background: rgb(20 15 25 / 0.45); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- theme: the explorer's map ---------- */
+body {
+  background:
+    radial-gradient(ellipse at 50% 35%, #f2e3bb 0%, #e7d2a2 58%, #d2b684 100%) fixed;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .1 0 0 0 .1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+body::after {
+  content: ''; position: fixed; right: -70px; bottom: -70px; width: 320px; height: 320px; pointer-events: none; z-index: 0; opacity: 0.13;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='none' stroke='%233b2a18' stroke-width='1.2'/%3E%3Ccircle cx='50' cy='50' r='38' fill='none' stroke='%233b2a18' stroke-width='.6' stroke-dasharray='2 2'/%3E%3Cpath d='M50 4 L58 42 L96 50 L58 58 L50 96 L42 58 L4 50 L42 42Z' fill='%233b2a18'/%3E%3Cpath d='M50 22 L54 46 L78 50 L54 54 L50 78 L46 54 L22 50 L46 46Z' fill='%23f7ecd0'/%3E%3C/svg%3E") no-repeat center / contain;
+}
+.screen { position: relative; z-index: 1; }
+.brand h1 { font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-weight: 700; font-variant: small-caps; letter-spacing: 0.05em; font-size: 2.9rem; text-shadow: 1px 1px 0 rgb(255 255 255 / 0.45); }
+.brand h1::before, .brand h1::after { font-size: 0.5em; vertical-align: 0.3em; text-shadow: none; }
+.brand h1::before { content: '🧭 '; }
+.brand h1::after { content: ' 🗺️'; }
+.brand p { font-style: italic; }
+.divider { display: flex; align-items: center; gap: 10px; }
+.divider::before, .divider::after { content: ''; flex: 1; border-top: 2px dotted var(--line); }
+.panel, .rules { border: 2px solid var(--line); border-radius: 10px; box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px var(--line), var(--shadow); }
+.area-head .name { font-family: "Palatino Linotype", Palatino, Georgia, serif; color: var(--accent); font-size: 1.05rem; }
+.btn { border-width: 2px; border-color: var(--line); }
+.btn.primary { border-color: #7d2f12; box-shadow: 0 2px 0 #7d2f12; }
+.btn.ghost { border-color: transparent; }
+.levels .lvl { border-width: 2px; }
+input.text { border-width: 2px; }
+dialog { border: 2px solid var(--line); box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px var(--line), 0 20px 60px rgb(40 25 5 / 0.4); }
+#roomCode { text-transform: capitalize; }
