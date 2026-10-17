@@ -14,6 +14,7 @@
   <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
   <script src="cards.js" defer></script>
   <script src="game.js" defer></script>
+  <script src="bot.js" defer></script>
   <script src="net.js" defer></script>
   <script src="app.js" defer></script>
 </head>
@@ -34,6 +35,15 @@
         <input id="codeInput" class="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
         <button class="btn primary" type="submit">Join</button>
       </form>
+      <div class="divider">or play on your own against a computer partner</div>
+      <div class="solo">
+        <div class="levels" role="group" aria-label="Difficulty">
+          <button type="button" class="chip" data-level="easy">Easy</button>
+          <button type="button" class="chip" data-level="normal">Normal</button>
+          <button type="button" class="chip" data-level="hard">Hard</button>
+        </div>
+        <button id="soloBtn" class="btn big" type="button">Play solo</button>
+      </div>
       <button id="resumeBtn" class="btn" hidden></button>
     </div>
     <details class="rules">
@@ -62,7 +72,7 @@
 
   <main id="game" class="screen" hidden>
     <header class="topbar">
-      <div class="room"><span id="netDot" class="dot"></span>Room <b id="roomCode"></b></div>
+      <div class="room"><span id="netDot" class="dot"></span><span id="roomLabel">Room</span> <b id="roomCode"></b></div>
       <button id="leaveBtn" class="btn ghost">Leave</button>
     </header>
     <div id="netBanner" class="banner" hidden></div>

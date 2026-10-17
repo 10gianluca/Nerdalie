@@ -379,3 +379,43 @@ test('a "no Tricks" spell skips the trick choice on the next turn, and the next 
   assert.equal(g2.blockTricks, false, 'casting another Spell ends the block');
   assert.equal(g2.phase, 'trick');
 });
+
+test('a discard Spell with too few cards in hand only asks for the cards that are there', () => {
+  const s = G.newGame(['Ana', 'Ben'], 0);
+  s.players[0].hand = s.players[0].hand.slice(0, 2);
+  s.phase = 'spell';
+  s.pendingSpell = C.SPELLS.find((sp) => sp.effect === 'discard' && sp.amount === 3);
+  const g = G.apply(s, 0, { type: 'continueFromSpell' });
+  assert.deepEqual(g.pendingDiscard, { min: 2, max: 2, reason: 'spell' });
+  const g2 = G.apply(g, 0, { type: 'discard', cardIds: g.players[0].hand.slice() });
+  assert.equal(g2.pendingDiscard, null);
+  assert.equal(g2.active, 1, 'the turn carried on once the discard was done');
+  s.players[0].hand = [];
+  const g3 = G.apply(s, 0, { type: 'continueFromSpell' });
+  assert.equal(g3.pendingDiscard, null, 'an empty hand has nothing to discard');
+  assert.equal(g3.active, 1);
+});
+
+test('stalemate: eight turns in a row with nobody able to play ends the game as a loss', () => {
+  let s = G.newGame(['Ana', 'Ben'], 0);
+  s.deck = [];
+  s.players[0].hand = [];
+  s.players[1].hand = [];
+  s.spellDeck = Array(20).fill('s6'); // only a harmless 'skip your play' Spell, so nothing else can end the game
+  let turns = 0;
+  while (s.phase !== 'over' && turns < 40) {
+    s = G.apply(s, s.active, { type: s.phase === 'trick' ? 'skipTrick' : s.phase === 'play' ? 'cannotPlay' : 'continueFromSpell' });
+    turns++;
+  }
+  assert.equal(s.phase, 'over');
+  assert.deepEqual(s.end, { result: 'lose', reason: 'stalled' });
+});
+
+test('playing a card resets the stall counter', () => {
+  const s = freshGame((st) => G.legalPlays(st, 0).some((m) => !st.index[m.cardId].special));
+  s.stall = 5;
+  const g1 = G.apply(s, 0, { type: 'skipTrick' });
+  const move = G.legalPlays(g1, 0).find((m) => !g1.index[m.cardId].special);
+  const g2 = G.apply(g1, 0, { type: 'play', cardId: move.cardId, pile: move.pile });
+  assert.equal(g2.stall, 0);
+});

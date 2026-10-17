@@ -1,7 +1,7 @@
 // Network-first service worker: always fresh when online, still opens offline once installed.
 const CACHE = 'scout-v1';
 const SHELL = [
-  './', 'index.html', 'styles.css', 'game.js', 'net.js', 'app.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'game.js', 'bot.js', 'net.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'Merisa-gxvMY.ttf',
 ];
 

@@ -61,6 +61,10 @@ input.text:focus { border-color: var(--ink); }
 .join { display: flex; gap: 10px; }
 .join input { text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700; text-align: center; }
 .join .btn { flex-shrink: 0; }
+.solo { display: grid; gap: 10px; }
+.levels { display: flex; gap: 8px; }
+.levels .chip { flex: 1; appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 999px; padding: 0.55rem 0.5rem; font-weight: 700; cursor: pointer; }
+.levels .chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 .rules { margin-top: 18px; background: var(--surface); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .rules summary { font-weight: 700; cursor: pointer; }
 .rules ul { margin: 10px 0 0; padding-left: 1.2rem; color: var(--muted); line-height: 1.5; }

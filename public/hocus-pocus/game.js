@@ -18,6 +18,8 @@
     return a;
   };
   const other = (seat) => 1 - seat;
+  // Turns in a row with no card played (everyone stuck on Spells) before the game is called a loss.
+  const STALL_LIMIT = 8;
 
   function buildIndex(deck) {
     const idx = {};
@@ -79,6 +81,7 @@
       phase: 'trick',
       pendingDiscard: null, // { min, max, reason: 'cantPlay' | 'spell' }
       pendingSpell: null, // a drawn spell awaiting a Circle-of-Salt decision
+      stall: 0, // consecutive turns where no card was played
       justStunned: false,
       pendingStunWitch: null,
       log: [],
@@ -149,9 +152,12 @@
       case 'extraSpell':
         drawSpell(s, seat);
         break;
-      case 'discard':
-        s.pendingDiscard = { min: spell.amount, max: spell.amount, reason: 'spell' };
+      case 'discard': {
+        // With the deck empty a hand can shrink below the Spell's number: discard what is there.
+        const n = Math.min(spell.amount, s.players[seat].hand.length);
+        if (n > 0) s.pendingDiscard = { min: n, max: n, reason: 'spell' };
         break;
+      }
       default:
         break;
     }
@@ -202,6 +208,12 @@
     }
     s.active = other(s.active);
     s.turn++;
+    if (s.stall >= STALL_LIMIT) {
+      s.phase = 'over';
+      s.end = { result: 'lose', reason: 'stalled' };
+      log(s, 'Nobody can play a card any more — the potion is complete. You lose.');
+      return;
+    }
     beginTurn(s);
   }
 
@@ -261,6 +273,7 @@
         s.tricksUsed[action.trick] = true;
         if (action.trick === 'billy') {
           log(s, `${me.name} uses Billy Butcherson — skips playing, and skips drawing, this turn.`);
+          s.stall++;
           endTurnOrRound(s); // no play, no draw
           break;
         }
@@ -306,6 +319,7 @@
         if (!canPlayOn(s, action.cardId, action.pile)) fail("That card doesn't match that pile");
         const card = s.index[action.cardId];
         me.hand = me.hand.filter((c) => c !== action.cardId);
+        s.stall = 0;
         s.cauldron[action.pile].push(action.cardId);
         log(s, `${me.name} plays ${C.TYPE_NAMES[card.type]} (${C.COLOR_NAMES[card.color]}) onto pile ${action.pile + 1}.`);
         const stunWitch = checkStun(s);
@@ -331,6 +345,7 @@
       case 'cannotPlay': {
         if (s.phase !== 'play') fail('You cannot do that right now');
         if (legalPlays(s, player).length) fail('You do have a legal play — you must make it');
+        s.stall++;
         s.phase = 'spell';
         drawSpell(s, player);
         finishSpellResolution(s);

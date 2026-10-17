@@ -21,6 +21,7 @@
 
   const app = {
     role: null, // 'host' | 'guest'
+    solo: false, // playing against the computer: this browser is the host, with no network
     seat: 0,
     session: null, // persisted: { role, code, name, token | guestToken, state }
     state: null, // host: full state; guest: masked view from host
@@ -99,6 +100,7 @@
       app.state = G.apply(app.state, player, action);
     } catch (e) {
       if (player === 0) toast(e.message);
+      else if (app.solo) console.warn("The computer's move was rejected:", e.message);
       else app.net.send({ t: 'error', message: e.message });
       return;
     }
@@ -106,6 +108,7 @@
     saveSession();
     pushState();
     render();
+    scheduleBot();
   }
 
   function pushState() {
@@ -182,6 +185,59 @@
     }
   }
 
+  // ---------- solo: play against the computer ----------
+  const Bot = window.HocusBot;
+  const LEVEL_KEY = 'hocuspocus.level';
+  const LEVELS = ['easy', 'normal', 'hard'];
+  let botTimer = null;
+
+  // The computer is player 1. After every action it checks whether it has something to do and answers after a short pause.
+  function scheduleBot() {
+    clearTimeout(botTimer);
+    if (!app.solo || !app.state) return;
+    const level = app.session.level || 'normal';
+    const next = () => Bot.choose(G.viewFor(app.state, 1), 1, Math.random, level);
+    if (!next()) return;
+    botTimer = setTimeout(() => {
+      if (!app.solo || !app.state) return;
+      const action = next();
+      if (action) applyAction(1, action);
+    }, 750);
+  }
+
+  function startSolo(session) {
+    app.role = 'host';
+    app.solo = true;
+    app.seat = 0;
+    app.session = session;
+    app.net = null;
+    app.guestLink = null;
+    app.connected = true;
+    app.state = session.state || G.newGame([session.name, 'Computer'], Math.random() < 0.5 ? 0 : 1);
+    saveSession();
+    show('game');
+    render();
+    scheduleBot();
+  }
+
+  function initLevels() {
+    const saved = store.get(LEVEL_KEY);
+    const current = LEVELS.includes(saved) ? saved : 'normal';
+    const chips = document.querySelectorAll('.levels .chip');
+    for (const chip of chips) {
+      chip.classList.toggle('on', chip.dataset.level === current);
+      chip.addEventListener('click', () => {
+        for (const c of chips) c.classList.toggle('on', c === chip);
+        store.set(LEVEL_KEY, chip.dataset.level);
+      });
+    }
+  }
+
+  const chosenLevel = () => {
+    const on = document.querySelector('.levels .chip.on');
+    return on ? on.dataset.level : 'normal';
+  };
+
   // ---------- joining ----------
   function startGuest(session) {
     app.role = 'guest';
@@ -225,9 +281,10 @@
 
   function leave(skipConfirm) {
     const running = app.state && app.state.phase !== 'over';
-    if (!skipConfirm && running && !confirm('Leave this game? Your friend will be left waiting.')) return;
+    if (!skipConfirm && running && !confirm(app.solo ? 'Leave this game? It will not be saved.' : 'Leave this game? Your friend will be left waiting.')) return;
     if (app.net) app.net.destroy();
-    Object.assign(app, { role: null, session: null, state: null, net: null, connected: false, guestLink: null, busy: false, overKey: null, renderKey: null });
+    clearTimeout(botTimer);
+    Object.assign(app, { solo: false, role: null, session: null, state: null, net: null, connected: false, guestLink: null, busy: false, overKey: null, renderKey: null });
     resetSelection();
     store.del(SESSION_KEY);
     if ($('overDialog').open) $('overDialog').close();
@@ -461,7 +518,8 @@
   }
 
   function renderNet(s) {
-    $('roomCode').textContent = app.session.code;
+    $('roomLabel').textContent = app.solo ? 'Solo ·' : 'Room';
+    $('roomCode').textContent = app.solo ? (app.session.level || 'normal') : app.session.code;
     $('netDot').classList.toggle('off', !app.connected);
     const banner = $('netBanner');
     banner.hidden = app.connected;
@@ -513,7 +571,9 @@
     $('overTitle').textContent = win ? 'You win! 🎉' : 'You lose…';
     $('overWhy').textContent = win
       ? 'Three stuns and the sun has risen — the Sanderson sisters are defeated together.'
-      : 'The Ingredient deck ran out with a Spell still demanding more cards.';
+      : s.end.reason === 'stalled'
+        ? 'Nobody could play a card for too long, so the potion was finished.'
+        : 'The Ingredient deck ran out with a Spell still demanding more cards.';
     if (!$('overDialog').open) $('overDialog').showModal();
   }
 
@@ -541,7 +601,7 @@
     if (join) $('codeInput').value = join;
     const saved = store.get(SESSION_KEY);
     $('resumeBtn').hidden = !saved;
-    if (saved) $('resumeBtn').textContent = `Resume game in room ${saved.code}`;
+    if (saved) $('resumeBtn').textContent = saved.role === 'solo' ? 'Resume your solo game' : `Resume game in room ${saved.code}`;
   }
 
   function tapHandCard(id) {
@@ -610,8 +670,15 @@
     startGuest({ role: 'guest', code, name, token: myToken() });
   });
 
+  $('soloBtn').addEventListener('click', () => {
+    const name = requireName();
+    if (!name) return;
+    startSolo({ role: 'solo', code: 'SOLO', name, level: chosenLevel(), state: null });
+  });
+
   $('resumeBtn').addEventListener('click', () => {
     const saved = store.get(SESSION_KEY);
+    if (saved && saved.role === 'solo') return startSolo(saved);
     if (!saved || !onlineReady()) return;
     if (saved.role === 'host') startHost(saved);
     else startGuest(saved);
@@ -666,6 +733,7 @@
   });
   $('closeOverBtn').addEventListener('click', () => $('overDialog').close());
 
+  initLevels();
   initHome();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline install is optional */ });
