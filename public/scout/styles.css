@@ -105,21 +105,28 @@ input.text:focus { border-color: var(--ink); }
 
 /* ---------- cards ---------- */
 .scard {
-  --c: #777; appearance: none; border: 0; padding: 0; margin: 0; flex: 0 0 auto;
-  width: 48px; height: 76px; border-radius: 9px; background: var(--c); color: #fff; box-shadow: 0 0 0 2px var(--c), var(--shadow);
-  display: grid; grid-template-rows: 1fr auto; place-items: center; font-weight: 800; position: relative; cursor: default;
+  --c: #777; --d: #777; appearance: none; border: 0; padding: 0; margin: 0; flex: 0 0 auto;
+  width: 48px; height: 76px; border-radius: 9px; color: #fff; position: relative; cursor: default; font-weight: 800; overflow: hidden;
+  /* split corner to corner like the real cards: this number's colour top-left, the other number's colour bottom-right */
+  background: linear-gradient(to bottom right, var(--c) 49%, rgb(255 255 255 / 0.9) 49% 51%, var(--d) 51%);
+  box-shadow: 0 0 0 2px var(--ink), var(--shadow);
   transition: transform 0.12s ease, box-shadow 0.12s, opacity 0.2s;
 }
-.scard .up { font-size: 1.7rem; line-height: 1; font-variant-numeric: tabular-nums; align-self: center; }
-.scard .down { font-size: 0.75rem; opacity: 0.85; transform: rotate(180deg); align-self: end; margin-bottom: 5px; font-variant-numeric: tabular-nums; }
+.scard .up, .scard .down { position: absolute; font-size: 1.35rem; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 1px 0 rgb(0 0 0 / 0.3); }
+.scard .up { left: 6px; top: 6px; }
+.scard .down { right: 6px; bottom: 6px; transform: rotate(180deg); }
 .scard.pickable { cursor: pointer; }
 .scard.pickable:hover, .scard.pickable:focus-visible { transform: translateY(-3px); }
 .scard.sel { transform: translateY(-8px); box-shadow: 0 0 0 3px var(--ink), var(--shadow); }
 .scard.dim { opacity: 0.45; }
 .scard.big { width: 60px; height: 94px; }
-.scard.big .up { font-size: 2.1rem; }
+.scard.big .up, .scard.big .down { font-size: 1.75rem; }
+.scard.big .up { left: 8px; top: 8px; }
+.scard.big .down { right: 8px; bottom: 8px; }
 .n1 { --c: #4a6fa5; } .n2 { --c: #2f8a9a; } .n3 { --c: #2f9470; } .n4 { --c: #5a9a34; } .n5 { --c: #9a8f1f; }
 .n6 { --c: #c08a1e; } .n7 { --c: #cc6d2a; } .n8 { --c: #c4493a; } .n9 { --c: #a83f6a; } .n10 { --c: #6a4c9c; }
+.d1 { --d: #4a6fa5; } .d2 { --d: #2f8a9a; } .d3 { --d: #2f9470; } .d4 { --d: #5a9a34; } .d5 { --d: #9a8f1f; }
+.d6 { --d: #c08a1e; } .d7 { --d: #cc6d2a; } .d8 { --d: #c4493a; } .d9 { --d: #a83f6a; } .d10 { --d: #6a4c9c; }
 
 .tableset, .hand { display: flex; gap: 6px; overflow-x: auto; padding: 12px 4px 8px; align-items: flex-end; min-height: 100px; scrollbar-width: thin; }
 .tableset { justify-content: center; }
@@ -193,3 +200,16 @@ input.text { border: 2px solid var(--ink); }
 .area-head .name { color: var(--accent); }
 dialog { border: 2px solid var(--ink); box-shadow: 6px 6px 0 var(--gold), 0 20px 60px rgb(0 0 0 / 0.3); }
 #roomCode { text-transform: capitalize; }
+
+/* ---------- card art: circus tickets, tent-striped backs and gold coins ---------- */
+.scard::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.18), transparent 42%, rgb(0 0 0 / 0.12));
+}
+.opphand span {
+  background: repeating-linear-gradient(90deg, #d63a36 0 3px, #fff4de 3px 6px); box-shadow: 0 0 0 1.5px var(--ink);
+}
+.chips i {
+  background: radial-gradient(circle at 35% 30%, #fff0b3, var(--gold) 55%, #b9780f); box-shadow: 0 0 0 1.5px #8a5a07, 0 1px 2px rgb(0 0 0 / 0.3);
+}
+.chips i.spent { background: transparent; box-shadow: 0 0 0 1.5px var(--line); }

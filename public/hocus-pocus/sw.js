@@ -1,7 +1,7 @@
 // Network-first service worker: always fresh when online, still opens offline once installed.
 const CACHE = 'hocus-pocus-v1';
 const SHELL = [
-  './', 'index.html', 'styles.css', 'cards.js', 'game.js', 'bot.js', 'net.js', 'app.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'cards.js', 'art.js', 'game.js', 'bot.js', 'net.js', 'app.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'Merisa-gxvMY.ttf',
 ];
 

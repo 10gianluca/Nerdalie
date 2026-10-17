@@ -9,7 +9,7 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-  const EMOJI = { newtsaliva: '🦎', oilofboil: '🫧', deadmanstoe: '🦶', thineowntongue: '👅', dashofpox: '🤢' };
+  const Art = window.HocusArt;
   const COLOR_CLASS = { orange: 'c-orange', purple: 'c-purple', yellow: 'c-yellow', green: 'c-green', blue: 'c-blue' };
 
   const store = {
@@ -328,22 +328,26 @@
     if (!card) return '';
     const tag = o.pickable ? 'button' : 'div';
     const cls = ['icard', COLOR_CLASS[card.color], o.mini && 'mini', o.pickable && 'pickable', o.sel && 'sel', o.dim && 'dim'].filter(Boolean).join(' ');
-    const badge = card.special === 'binx' ? '👁' : card.special === 'book' ? '📖' : '';
+    const badge = card.special ? Art.badge(card.special) : '';
     return `<${tag} class="${cls}" data-id="${esc(cardId)}" aria-label="${esc(C.TYPE_NAMES[card.type])}, ${esc(C.COLOR_NAMES[card.color])}${badge ? ', special' : ''}">` +
-      `<span class="emoji">${EMOJI[card.type]}</span><span class="label">${esc(C.TYPE_NAMES[card.type])}</span>${badge ? `<span class="badge">${badge}</span>` : ''}</${tag}>`;
+      `<span class="art">${Art.icon(card.type)}</span><span class="label">${esc(C.TYPE_NAMES[card.type])}</span>${badge ? `<span class="badge">${badge}</span>` : ''}</${tag}>`;
   }
 
   const RING_RADIUS = 34; // % of the cauldron box, measured from its centre
   const CAULDRON_ART = '<svg class="pot" viewBox="0 0 120 120" aria-hidden="true">' +
     '<rect x="34" y="92" width="9" height="14" rx="3" fill="#2b2631"/><rect x="77" y="92" width="9" height="14" rx="3" fill="#2b2631"/>' +
     '<path d="M16 52 Q16 98 60 98 Q104 98 104 52 Z" fill="#2b2631"/><ellipse cx="60" cy="52" rx="44" ry="11" fill="#2b2631"/>' +
-    '<ellipse cx="60" cy="48" rx="35" ry="7" fill="#5a9a5a"/></svg>';
+    '<ellipse cx="60" cy="48" rx="35" ry="7" fill="#5a9a5a"/>' +
+    '<circle cx="46" cy="40" r="3" fill="#7ad06a"/><circle cx="73" cy="38" r="2.200" fill="#7ad06a"/><circle cx="60" cy="33" r="1.600" fill="#7ad06a"/>' +
+    '<circle cx="60" cy="74" r="10" fill="#b8f0a8"/><rect x="55" y="80" width="10" height="7" rx="2" fill="#b8f0a8"/>' +
+    '<circle cx="56" cy="73" r="2.800" fill="#2b2631"/><circle cx="64" cy="73" r="2.800" fill="#2b2631"/><path d="M60 77l-1.500 3h3z" fill="#2b2631"/>' +
+    '<path d="M57.500 83v4M60 83v4M62.500 83v4" stroke="#2b2631" stroke-width=".9"/></svg>';
 
   function topCardHtml(s, pile) {
     const top = G.pileTop(s, pile);
     const empty = s.cauldron[pile].length === 0;
     const cls = ['icard', COLOR_CLASS[top.color], empty && 'start'].filter(Boolean).join(' ');
-    return `<div class="${cls}"><span class="emoji">${EMOJI[top.type]}</span><span class="label">${esc(C.TYPE_NAMES[top.type])}</span></div>`;
+    return `<div class="${cls}"><span class="art">${Art.icon(top.type)}</span><span class="label">${esc(C.TYPE_NAMES[top.type])}</span></div>`;
   }
 
   // ---------- rendering: board ----------
@@ -354,7 +358,7 @@
   }
 
   function renderWitches(s) {
-    $('witches').innerHTML = C.WITCHES.map((w) => `<span class="w${s.stunnedWitch === w ? ' stunned' : ''}">${esc(C.WITCH_NAMES[w])}${s.stunnedWitch === w ? ' 💫' : ''}</span>`).join('');
+    $('witches').innerHTML = C.WITCHES.map((w) => `<span class="w${s.stunnedWitch === w ? ' stunned' : ''}"><span class="hat">${Art.hat(w)}</span>${esc(C.WITCH_NAMES[w])}${s.stunnedWitch === w ? ' 💫' : ''}</span>`).join('');
   }
 
   function renderScoreboard(s) {

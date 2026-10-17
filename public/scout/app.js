@@ -311,7 +311,7 @@
 
   function cardHtml(c, o = {}) {
     const tag = o.pickable ? 'button' : 'div';
-    const cls = ['scard', 'n' + c.up, o.big && 'big', o.pickable && 'pickable', o.sel && 'sel', o.dim && 'dim'].filter(Boolean).join(' ');
+    const cls = ['scard', 'n' + c.up, 'd' + c.down, o.big && 'big', o.pickable && 'pickable', o.sel && 'sel', o.dim && 'dim'].filter(Boolean).join(' ');
     const attrs = `${o.i != null ? ` data-i="${o.i}"` : ''}${o.scout ? ` data-scout="${o.scout}"` : ''}`;
     return `<${tag} class="${cls}"${attrs} aria-label="Card showing ${c.up}, other side ${c.down}">` +
       `<span class="up">${c.up}</span><span class="down">${c.down}</span></${tag}>`;

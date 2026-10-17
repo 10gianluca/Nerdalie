@@ -108,7 +108,9 @@ input.text:focus { border-color: var(--ink); }
 .suns i { width: 20px; height: 20px; border-radius: 50%; background: var(--line); box-shadow: inset 0 0 0 2px var(--surface); font-size: 0; }
 .suns i.lit { background: #e8a93a; box-shadow: 0 0 0 2px #c98920; }
 .witches { display: flex; justify-content: center; gap: 8px; font-size: 0.8rem; font-weight: 700; color: var(--muted); margin-bottom: 4px; flex-wrap: wrap; }
-.witches .w { padding: 3px 9px; border-radius: 999px; border: 1.5px solid var(--line); }
+.witches .w { padding: 3px 9px 3px 5px; border-radius: 999px; border: 1.5px solid var(--line); display: inline-flex; align-items: center; gap: 4px; }
+.witches .hat { width: 18px; height: 18px; display: inline-grid; }
+.witches .hat svg { width: 100%; height: 100%; }
 .witches .w.stunned { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 
 /* ---------- ingredient cards ---------- */
@@ -118,15 +120,17 @@ input.text:focus { border-color: var(--ink); }
   display: grid; grid-template-rows: auto 1fr auto; place-items: center; font-weight: 800; position: relative; cursor: default;
   transition: transform 0.12s ease, box-shadow 0.12s, opacity 0.2s; padding-top: 4px;
 }
-.icard .emoji { font-size: 1.7rem; line-height: 1; }
+.icard .art { width: 66%; display: grid; place-items: center; filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.22)); }
+.icard .art svg { width: 100%; height: auto; display: block; }
 .icard .label { font-size: 0.56rem; font-weight: 800; letter-spacing: 0.02em; text-align: center; line-height: 1.1; padding: 0 3px 5px; }
-.icard .badge { position: absolute; top: 3px; right: 3px; font-size: 0.85rem; background: rgba(0,0,0,0.25); border-radius: 50%; width: 18px; height: 18px; display: grid; place-items: center; }
+.icard .badge { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,0.32); border-radius: 50%; width: 20px; height: 20px; display: grid; place-items: center; }
+.icard .badge svg { width: 13px; height: 13px; }
 .icard.pickable { cursor: pointer; }
 .icard.pickable:hover, .icard.pickable:focus-visible { transform: translateY(-3px); }
 .icard.sel { transform: translateY(-8px); box-shadow: 0 0 0 3px var(--ink), var(--shadow); }
 .icard.dim { opacity: 0.4; }
 .icard.mini { width: 40px; height: 56px; }
-.icard.mini .emoji { font-size: 1.2rem; }
+
 .icard.mini .label { font-size: 0.46rem; padding-bottom: 3px; }
 .icard.start { opacity: 0.55; }
 .c-orange { --c: #cc7a2a; } .c-purple { --c: #7a4a9c; } .c-yellow { --c: #b89a1e; } .c-green { --c: #3f8a4a; } .c-blue { --c: #2f6fa5; }
@@ -219,3 +223,22 @@ input.text::placeholder { color: var(--muted); opacity: 0.7; }
 .trick.active, .trick.active .ttext { color: var(--on-accent); }
 @keyframes brew { 50% { filter: drop-shadow(0 0 22px rgb(122 208 106 / 0.9)); } }
 #roomCode { text-transform: capitalize; }
+
+/* ---------- creepy extras ---------- */
+body::after {
+  content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: 120px; pointer-events: none; z-index: 0; opacity: 0.95;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='120' viewBox='0 0 360 120'%3E%3Cg fill='%2306020d'%3E%3Cpath d='M0 120V94Q40 86 80 94T160 92T240 94T320 90T360 94V120z'/%3E%3Cpath d='M30 104V82a9 9 0 0 1 18 0V104zM118 104V76a10 10 0 0 1 20 0V104zM205 104V84a8 8 0 0 1 16 0V104zM284 104V80a9 9 0 0 1 18 0V104z'/%3E%3C/g%3E%3Cg stroke='%2306020d' stroke-width='4' stroke-linecap='round' fill='none'%3E%3Cpath d='M168 104V70M160 79H176'/%3E%3Cpath d='M338 104C338 84 334 76 328 64M334 82L320 72M332 74L344 62M329 66L322 56M330 66L336 54'/%3E%3Cpath d='M64 104C64 88 60 80 54 70M60 86L48 78M58 78L68 66'/%3E%3C/g%3E%3Cg fill='%23ffe27a'%3E%3Ccircle cx='247' cy='88' r='1.700'/%3E%3Ccircle cx='254' cy='88' r='1.700'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom left;
+}
+.brand h1 { animation: flicker 6s infinite; }
+.icard::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle at 50% 38%, transparent 38%, rgb(0 0 0 / 0.4) 100%), linear-gradient(160deg, rgb(255 255 255 / 0.16), transparent 40%);
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.22);
+}
+.icard::after {
+  content: ''; position: absolute; left: 1px; top: 1px; width: 44%; aspect-ratio: 1; pointer-events: none; opacity: 0.6;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cg stroke='%23fff' stroke-width='1.100' fill='none'%3E%3Cpath d='M0 0H40M0 0L38 14M0 0L30 30M0 0L14 38M0 0V40'/%3E%3Cpath d='M10 0Q8 8 0 10M20 0Q16 16 0 20M30 0Q24 24 0 30'/%3E%3C/g%3E%3C/svg%3E") no-repeat top left / contain;
+}
+.icard .label { text-shadow: 0 1px 2px rgb(0 0 0 / 0.55); }
+.cauldron .pot { filter: drop-shadow(0 0 14px rgb(122 208 106 / 0.7)); }
+@keyframes flicker { 0%, 100% { opacity: 1; } 91% { opacity: 1; } 92% { opacity: 0.55; } 94% { opacity: 1; } 96% { opacity: 0.7; } 97% { opacity: 1; } }

@@ -207,3 +207,25 @@ body::after {
 input.text { border-width: 2px; }
 dialog { border: 2px solid var(--line); box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px var(--line), 0 20px 60px rgb(40 25 5 / 0.4); }
 #roomCode { text-transform: capitalize; }
+
+/* ---------- card art: a scene for each expedition ---------- */
+.lcard { position: relative; overflow: hidden; }
+.lcard > * { position: relative; z-index: 1; }
+.lcard:not(.back):not(.empty)::before {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-repeat: no-repeat; background-position: bottom; background-size: 100% 64%;
+}
+.lcard:not(.back):not(.empty)::after {
+  content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.22), transparent 45%); box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.28);
+}
+.lcard.c-yellow::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 45' preserveAspectRatio='none'%3E%3Ccircle cx='47' cy='9' r='6' fill='%23fff7d6' opacity='.9'/%3E%3Cpath d='M0 30Q15 20 30 30T60 28V45H0z' fill='%23000' opacity='.16'/%3E%3Cpath d='M0 38Q18 28 36 38T60 36V45H0z' fill='%23000' opacity='.26'/%3E%3Cpath d='M10 36V24M10 31H7V26M10 29H13V25' stroke='%23000' stroke-width='1.800' opacity='.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.lcard.c-blue::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 45' preserveAspectRatio='none'%3E%3Cpath d='M38 26V8L49 24z' fill='%23fff' opacity='.85'/%3E%3Cpath d='M33 27H51L47 32H37z' fill='%23000' opacity='.45'/%3E%3Cpath d='M0 30Q8 24 15 30T30 30T45 30T60 30V45H0z' fill='%23fff' opacity='.2'/%3E%3Cpath d='M0 38Q8 32 15 38T30 38T45 38T60 38V45H0z' fill='%23000' opacity='.24'/%3E%3C/svg%3E"); }
+.lcard.c-white::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 45' preserveAspectRatio='none'%3E%3Cpath d='M0 40L13 15L23 31L34 6L48 33L60 22V45H0z' fill='%23000' opacity='.3'/%3E%3Cpath d='M34 6L28 18L32 16L34 20L37 16L41 19z' fill='%23fff'/%3E%3Cpath d='M13 15L9 23L12 21L14 24L17 21z' fill='%23fff'/%3E%3C/svg%3E"); }
+.lcard.c-green::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 45' preserveAspectRatio='none'%3E%3Cpath d='M0 45V32Q6 22 12 32Q18 20 24 32Q30 18 36 32Q42 22 48 32Q54 24 60 32V45z' fill='%23000' opacity='.3'/%3E%3Cpath d='M47 40Q44 24 46 14' stroke='%23000' stroke-width='2.200' opacity='.5' fill='none'/%3E%3Cpath d='M46 14Q38 10 32 17M46 14Q54 8 58 15M46 14Q44 6 39 4M46 14Q52 17 56 24' stroke='%23000' stroke-width='1.900' opacity='.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.lcard.c-red::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 45' preserveAspectRatio='none'%3E%3Ccircle cx='27' cy='11' r='4.500' fill='%23000' opacity='.16'/%3E%3Ccircle cx='34' cy='6' r='5.500' fill='%23000' opacity='.12'/%3E%3Cpath d='M0 45L17 31L24 22H36L43 31L60 45z' fill='%23000' opacity='.38'/%3E%3Cpath d='M24 22L30 27L36 22z' fill='%23ffb347'/%3E%3Cpath d='M30 27V35M26.500 28L25 37M33.500 28L35 36' stroke='%23ff8a3a' stroke-width='1.300' opacity='.9' stroke-linecap='round'/%3E%3C/svg%3E"); }
+.lcard.back::after {
+  content: ''; position: absolute; inset: 16% 10%; z-index: 0; pointer-events: none; opacity: 0.32;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='none' stroke='%23f1e2d2' stroke-width='3'/%3E%3Cpath d='M50 6L58 42L94 50L58 58L50 94L42 58L6 50L42 42z' fill='%23f1e2d2'/%3E%3C/svg%3E") no-repeat center / contain;
+}
+.lcard .v { text-shadow: 0 1px 2px rgb(0 0 0 / 0.35); }
