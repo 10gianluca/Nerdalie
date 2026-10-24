@@ -1,16 +1,37 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Collection.css';
 import {
   fetchSheetCsv, parseCsv, buildHeaderIndex, extraHeaders, distinctValues, filterRows, sortEntries,
   bggFindCandidates, bggOwnedCollection, missingFromSheet, incompleteRows, buildRowFromThing,
   buildPatchFromThing, appendRowViaScript, updateRowViaScript, bggGameUrl, bggCollectionUrl, cellAt,
+  DECISIONS_TAB, CHOICES, parseDecisions, undecidedGames, saveDecisionViaScript, matchKey,
 } from './collectionUtils';
 
 const SETTINGS_KEY = 'nerdalie.collection.settings';
 const SCRIPT_HELP = `function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheets()[0];
   var data = JSON.parse(e.postData.contents);
+
+  if (data.decision) {
+    // Keep / Discard / Play and see answers go in a second tab: Game, Choice
+    var tab = ss.getSheetByName('Decisions') || ss.insertSheet('Decisions', ss.getNumSheets());
+    if (tab.getLastRow() === 0) {
+      tab.appendRow(['Game', 'Choice']);
+      tab.setFrozenRows(1);
+      tab.getRange(1, 1, 1, 2).setFontWeight('bold');
+    }
+    var names = tab.getRange(1, 1, tab.getLastRow(), 1).getValues();
+    var found = 0;
+    for (var i = 1; i < names.length; i++) {
+      if (String(names[i][0]).trim() === data.decision.game) { found = i + 1; break; }
+    }
+    if (found) tab.getRange(found, 2).setValue(data.decision.choice);
+    else tab.appendRow([data.decision.game, data.decision.choice]);
+    return reply({ ok: true, kind: 'decision' });
+  }
+
   if (data.update) {
     var rowNum = data.update.rowIndex + 2; // row 1 is the header
     var range = sheet.getRange(rowNum, 1, 1, sheet.getLastColumn());
@@ -20,9 +41,16 @@ const SCRIPT_HELP = `function doPost(e) {
   } else {
     sheet.appendRow(data.row);
   }
-  return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+  return reply({ ok: true });
+}
+
+function reply(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }`;
+
+const CHOICE_CLASS = { Keep: 'gcKeep', Discard: 'gcDiscard', 'Play and see': 'gcPlay' };
+const CHOICE_KEY = { Keep: 'K', Discard: 'D', 'Play and see': 'P' };
 
 const loadSettings = () => {
   try {
@@ -34,10 +62,12 @@ const loadSettings = () => {
 
 function Collection() {
   const navigate = useNavigate();
+  const [tab, setTab] = useState('collection'); // 'collection' | 'decide' | 'manage'
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(() => !loadSettings().sheetLink);
   const [showScriptHelp, setShowScriptHelp] = useState(false);
   const [form, setForm] = useState(() => ({ sheetLink: '', bggUsername: '', scriptUrl: '', ...loadSettings() }));
+  const [notice, setNotice] = useState('');
 
   const [headers, setHeaders] = useState([]);
   const [rows, setRows] = useState([]);
@@ -73,6 +103,15 @@ function Collection() {
   const [enrichCandidates, setEnrichCandidates] = useState([]);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichError, setEnrichError] = useState('');
+
+  // Decide: one owned game at a time -> Keep / Discard / Play and see, saved to the sheet's Decisions tab.
+  const [dec, setDec] = useState({ status: 'idle', error: '', total: 0 }); // idle | loading | ready | error
+  const [queue, setQueue] = useState([]); // games still to answer; queue[0] is on screen
+  const [answers, setAnswers] = useState(() => new Map()); // matchKey(game) -> { game, choice }
+  const [history, setHistory] = useState([]); // answered this visit, newest last: { game, choice }
+  const [saving, setSaving] = useState({ sent: 0, pending: 0, failed: [] });
+  const sendQueue = useRef([]);
+  const sending = useRef(false);
 
   const idx = useMemo(() => buildHeaderIndex(headers), [headers]);
   const extras = useMemo(() => extraHeaders(headers, idx), [headers, idx]);
@@ -114,10 +153,12 @@ function Collection() {
     if (next.sheetLink !== settings.sheetLink || next.bggUsername !== settings.bggUsername) {
       setMissing(null);
       closeReview();
+      setDec({ status: 'idle', error: '', total: 0 });
     }
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     setSettings(next);
     setShowSettings(false);
+    setNotice('');
     if (next.sheetLink !== settings.sheetLink && next.sheetLink) loadSheet(next.sheetLink);
   }
 
@@ -173,11 +214,11 @@ function Collection() {
 
   // The BGG search for whichever row is now first in the enrich queue; auto-runs whenever that
   // changes (starting the queue, skipping, or saving a row), so there's always something to review.
-  async function searchEnrichHead(queue) {
+  async function searchEnrichHead(queueNow) {
     setEnrichCandidates([]);
     setEnrichError('');
-    if (!queue.length) return;
-    const name = cellAt(queue[0].row, idx.GAME);
+    if (!queueNow.length) return;
+    const name = cellAt(queueNow[0].row, idx.GAME);
     setEnrichBusy(true);
     try {
       const found = await bggFindCandidates(name);
@@ -192,10 +233,10 @@ function Collection() {
 
   function runEnrich() {
     if (!headers.length) return;
-    const queue = incompleteRows(rows, idx);
-    setEnrichQueue(queue);
+    const list = incompleteRows(rows, idx);
+    setEnrichQueue(list);
     closeReview();
-    searchEnrichHead(queue);
+    searchEnrichHead(list);
   }
 
   function pickEnrichCandidate(candidate) {
@@ -247,7 +288,7 @@ function Collection() {
     if (!settings.scriptUrl) {
       setShowSettings(true);
       setShowScriptHelp(true);
-      setReviewStatus('Set up 1-click adding below first (a one-time, 5-minute step), then come back and try again.');
+      setReviewStatus('Set up 1-click adding in Settings first (a one-time, 5-minute step), then come back and try again.');
       return;
     }
     if (review.source === 'enrich') {
@@ -301,19 +342,125 @@ function Collection() {
     setReviewBusy(false);
   }
 
+  // ---------- Decide ----------
+
+  async function loadDecide() {
+    setDec({ status: 'loading', error: '', total: 0 });
+    try {
+      const [owned, decisionsCsv] = await Promise.all([
+        bggOwnedCollection(settings.bggUsername),
+        // no Decisions tab yet is normal before the first answer, so a failed read just means "none"
+        fetchSheetCsv(settings.sheetLink, DECISIONS_TAB).catch(() => ''),
+      ]);
+      const known = parseDecisions(decisionsCsv);
+      setAnswers(known);
+      setHistory([]);
+      setQueue(undecidedGames(owned, known));
+      setDec({ status: 'ready', error: '', total: owned.length });
+    } catch (err) {
+      setDec({ status: 'error', error: err.message || 'Could not read your BGG collection', total: 0 });
+    }
+  }
+
+  // Open the Decide tab -> load it the first time.
+  useEffect(() => {
+    if (tab === 'decide' && dec.status === 'idle' && settings.bggUsername && settings.sheetLink) loadDecide();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, dec.status]);
+
+  // Answers are sent to the sheet one at a time, in order, in the background, so you can keep tapping.
+  async function pumpSaves(scriptUrl) {
+    if (sending.current) return;
+    sending.current = true;
+    while (sendQueue.current.length) {
+      const item = sendQueue.current[0];
+      try {
+        await saveDecisionViaScript(scriptUrl, item.game, item.choice);
+        sendQueue.current.shift();
+        setSaving((s) => ({ ...s, sent: s.sent + 1, pending: sendQueue.current.length }));
+      } catch (err) {
+        sendQueue.current.shift();
+        setSaving((s) => ({ ...s, failed: [...s.failed, { ...item, error: err.message }], pending: sendQueue.current.length }));
+      }
+    }
+    sending.current = false;
+  }
+
+  function decide(choice) {
+    if (!queue.length) return;
+    if (!settings.scriptUrl) {
+      setShowSettings(true);
+      setShowScriptHelp(true);
+      setNotice('Set up the sheet script first (steps below), so your answers can be saved to the Decisions tab.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    const game = queue[0];
+    setHistory((h) => [...h, { game, choice }]);
+    setAnswers((m) => new Map(m).set(matchKey(game.name), { game: game.name, choice }));
+    setQueue((q) => q.slice(1));
+    sendQueue.current.push({ game: game.name.trim(), choice });
+    setSaving((s) => ({ ...s, pending: sendQueue.current.length }));
+    pumpSaves(settings.scriptUrl);
+  }
+
+  // Go back to the last game to answer it differently; the new answer replaces the saved one.
+  function undoDecision() {
+    if (!history.length) return;
+    const last = history[history.length - 1];
+    setHistory(history.slice(0, -1));
+    setQueue([last.game, ...queue]);
+    setAnswers((m) => {
+      const next = new Map(m);
+      next.delete(matchKey(last.game.name));
+      return next;
+    });
+  }
+
+  function retryFailed() {
+    sendQueue.current.push(...saving.failed.map(({ game, choice }) => ({ game, choice })));
+    setSaving((s) => ({ ...s, failed: [], pending: sendQueue.current.length }));
+    pumpSaves(settings.scriptUrl);
+  }
+
+  // K / D / P answer the game on screen.
+  useEffect(() => {
+    if (tab !== 'decide' || dec.status !== 'ready') return undefined;
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target && e.target.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
+      const choice = { k: 'Keep', d: 'Discard', p: 'Play and see' }[e.key.toLowerCase()];
+      if (choice) decide(choice);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   const back = (e) => {
     e.preventDefault();
     navigate('/Board');
   };
 
+  const counts = useMemo(() => {
+    const c = { Keep: 0, Discard: 0, 'Play and see': 0 };
+    answers.forEach((a) => {
+      if (c[a.choice] !== undefined) c[a.choice] += 1;
+    });
+    return c;
+  }, [answers]);
+
+  const current = queue[0];
+  const answeredOwned = dec.total - queue.length;
+
   const reviewCard = review && (
-    <div className="gcCard gcReview">
+    <div className="gcReview">
       <div className="gcReviewHead">
         {review.item.image
           ? <img className="gcCover" src={review.item.image} alt="" onError={(e) => (e.target.style.visibility = 'hidden')} />
           : <div className="gcCover" />}
         <div>
-          <div className="gcCandName">{review.title}{review.item.year ? ` (${review.item.year})` : ''}</div>
+          <div className="gcCandName gcBig">{review.title}{review.item.year ? ` (${review.item.year})` : ''}</div>
           {(review.item.minPlayers || review.item.maxPlayers || review.item.playTime || review.item.rating) && (
             <div className="gcMuted">
               {review.item.minPlayers || '?'}–{review.item.maxPlayers || '?'} players · {review.item.playTime || '?'} min
@@ -347,28 +494,37 @@ function Collection() {
         </button>
         {review.source === 'sync' && <button className="gcBtn gcGhost" onClick={() => nextInQueue(review.item.id)} disabled={reviewBusy}>Skip</button>}
         {review.source === 'enrich' && <button className="gcBtn gcGhost" onClick={nextEnrichItem} disabled={reviewBusy}>Skip this row</button>}
-        {review.item.id && <a className="gcBtn" href={bggGameUrl(review.item.id)} target="_blank" rel="noreferrer">View on BoardGameGeek ↗</a>}
+        {review.item.id && <a className="gcBtn gcSecondary" href={bggGameUrl(review.item.id)} target="_blank" rel="noreferrer">View on BGG ↗</a>}
         <button className="gcBtn gcGhost" onClick={closeReview} disabled={reviewBusy}>Close</button>
       </div>
       {reviewStatus && <p className="gcMuted">{reviewStatus}</p>}
     </div>
   );
 
-  return (
-    <body className="gcPage">
-      <div className="gcWrap">
-        <a href="/Board" className="gcBack" onClick={back}>&larr; Back to games</a>
-        <h1 className="gcTitle">My Game Collection</h1>
-        <p className="gcSubtitle">Your Google Sheet and your BoardGameGeek collection, in one place.</p>
+  const readyToCompare = settings.bggUsername && settings.sheetLink;
 
-        <section className="gcCard">
-          {!showSettings ? (
-            <div className="gcConnectedBar">
-              {settings.sheetLink && <a className="gcBtn" href={settings.sheetLink} target="_blank" rel="noreferrer">Open Google Sheet ↗</a>}
-              {settings.bggUsername && <a className="gcBtn" href={bggCollectionUrl(settings.bggUsername)} target="_blank" rel="noreferrer">Open BGG collection ↗</a>}
-              <button className="gcBtn gcGhost" onClick={() => setShowSettings(true)}>Settings</button>
-            </div>
-          ) : (
+  return (
+    <div className="gcPage">
+      <div className="gcWrap">
+        <header className="gcHeader">
+          <div>
+            <a href="/Board" className="gcBack" onClick={back}>&larr; Games</a>
+            <h1 className="gcTitle">My Game Collection</h1>
+            <p className="gcSubtitle">
+              {rows.length ? `${rows.length} games in your sheet` : 'Your Google Sheet and your BoardGameGeek collection, together.'}
+            </p>
+          </div>
+          <div className="gcHeaderActions">
+            {settings.sheetLink && <a className="gcBtn gcSecondary gcSm" href={settings.sheetLink} target="_blank" rel="noreferrer">Sheet ↗</a>}
+            {settings.bggUsername && <a className="gcBtn gcSecondary gcSm" href={bggCollectionUrl(settings.bggUsername)} target="_blank" rel="noreferrer">BGG ↗</a>}
+            <button className="gcBtn gcGhost gcSm" onClick={() => setShowSettings((s) => !s)}>{showSettings ? 'Close settings' : 'Settings'}</button>
+          </div>
+        </header>
+
+        {notice && <div className="gcAlert">{notice}</div>}
+
+        {showSettings && (
+          <section className="gcCard">
             <form className="gcSettingsForm" onSubmit={saveSettings}>
               <label className="gcField">
                 <span>Google Sheet link</span>
@@ -382,7 +538,7 @@ function Collection() {
               </label>
               <div className="gcField">
                 <button type="button" className="gcLinkBtn" onClick={() => setShowScriptHelp((s) => !s)}>
-                  {showScriptHelp ? '▾' : '▸'} Set up 1-click adding to your Sheet (one time, ~5 min)
+                  {showScriptHelp ? '▾' : '▸'} Set up saving to your Sheet (one time, ~5 min)
                 </button>
                 {showScriptHelp && (
                   <div className="gcHelp">
@@ -397,9 +553,10 @@ function Collection() {
                       <li>Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then <b>Deploy</b> (approve the permission prompt — it's your own script on your own sheet).</li>
                       <li>Copy the <b>Web app URL</b> it gives you and paste it below.</li>
                     </ol>
+                    <p className="gcNote"><b>Already set this up before?</b> Replace the code with the version above, then <b>Deploy → Manage deployments</b>, click the pencil, choose <b>Version: New version</b> and <b>Deploy</b>. The URL stays the same, so there's nothing to change here. The new version adds the <b>Decisions</b> tab for Keep / Discard / Play and see.</p>
                     <p className="gcWarn">Keep this URL private — anyone who has it can add rows to your sheet. It's only saved in this browser, never in the site's code.</p>
                     <label className="gcField">
-                      <span>Sheet add-script URL</span>
+                      <span>Sheet script URL</span>
                       <input className="gcInput" placeholder="https://script.google.com/macros/s/…/exec" value={form.scriptUrl} onChange={(e) => setForm({ ...form, scriptUrl: e.target.value })} />
                     </label>
                   </div>
@@ -410,111 +567,225 @@ function Collection() {
                 {settings.sheetLink && <button type="button" className="gcBtn gcGhost" onClick={() => setShowSettings(false)}>Cancel</button>}
               </div>
             </form>
-          )}
-        </section>
+          </section>
+        )}
 
-        <section className="gcCard">
-          <div className="gcCardHead">
-            <h2>Sync from BGG</h2>
-          </div>
-          {!settings.bggUsername ? (
-            <p className="gcMuted">Add your BGG username above to check what's missing from your sheet.</p>
-          ) : !settings.sheetLink ? (
-            <p className="gcMuted">Add your Google Sheet above too — I need both to compare them.</p>
-          ) : (
-            <>
-              <div className="gcRow">
-                <button className="gcBtn gcPrimary" onClick={runSync} disabled={syncing || loading}>{syncing ? 'Checking your BGG collection…' : 'Check for games missing from my sheet'}</button>
-              </div>
-              {syncError && <p className="gcError">{syncError}</p>}
-              {missing && !syncing && (
-                <p className="gcMuted">
-                  {missing.length ? `${missing.length} game${missing.length === 1 ? '' : 's'} on BGG ${missing.length === 1 ? "isn't" : "aren't"} in your sheet yet.` : "Everything you own on BGG is already in your sheet. 🎉"}
-                </p>
-              )}
-            </>
-          )}
-          {review && review.source === 'sync' && reviewCard}
-        </section>
+        <nav className="gcTabs" role="tablist" aria-label="Collection sections">
+          <button role="tab" aria-selected={tab === 'collection'} className={`gcTab${tab === 'collection' ? ' gcOn' : ''}`} onClick={() => setTab('collection')}>
+            Collection{rows.length ? <span className="gcCount">{rows.length}</span> : null}
+          </button>
+          <button role="tab" aria-selected={tab === 'decide'} className={`gcTab${tab === 'decide' ? ' gcOn' : ''}`} onClick={() => setTab('decide')}>
+            Decide{dec.status === 'ready' && queue.length ? <span className="gcCount">{queue.length}</span> : null}
+          </button>
+          <button role="tab" aria-selected={tab === 'manage'} className={`gcTab${tab === 'manage' ? ' gcOn' : ''}`} onClick={() => setTab('manage')}>
+            Add &amp; sync{missing && missing.length ? <span className="gcCount">{missing.length}</span> : null}
+          </button>
+        </nav>
 
-        <section className="gcCard">
-          <div className="gcCardHead">
-            <h2>Your collection</h2>
-            {rows.length > 0 && <span className="gcHint">{entries.length} of {rows.length} games shown</span>}
-          </div>
-          {!settings.sheetLink ? (
-            <p className="gcMuted">Add your Google Sheet link above to see your collection here.</p>
-          ) : loading ? (
-            <p className="gcMuted">Loading your sheet…</p>
-          ) : loadError ? (
-            <p className="gcError">{loadError} <button className="gcLinkBtn" onClick={() => loadSheet(settings.sheetLink)}>Retry</button></p>
-          ) : (
-            <>
-              <div className="gcFilters">
-                <input className="gcInput" placeholder="Search…" value={filterText} onChange={(e) => setFilterText(e.target.value)} />
-                <input className="gcInput gcNarrow" type="number" min="1" placeholder="Players" value={filterPlayers} onChange={(e) => setFilterPlayers(e.target.value)} />
-                {typeOptions.length > 0 && (
-                  <select className="gcInput gcNarrow" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-                    <option value="">Any type</option>
-                    {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+        {tab === 'collection' && (
+          <section className="gcCard gcFlush">
+            {!settings.sheetLink ? (
+              <p className="gcEmpty">Add your Google Sheet link in Settings to see your collection here.</p>
+            ) : loading ? (
+              <p className="gcEmpty">Loading your sheet…</p>
+            ) : loadError ? (
+              <p className="gcEmpty gcError">{loadError} <button className="gcLinkBtn" onClick={() => loadSheet(settings.sheetLink)}>Retry</button></p>
+            ) : (
+              <>
+                <div className="gcFilters">
+                  <input className="gcInput gcGrow" placeholder="Search games…" value={filterText} onChange={(e) => setFilterText(e.target.value)} />
+                  <input className="gcInput gcNarrow" type="number" min="1" placeholder="Players" value={filterPlayers} onChange={(e) => setFilterPlayers(e.target.value)} />
+                  {typeOptions.length > 0 && (
+                    <select className="gcInput gcNarrow" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                      <option value="">Any type</option>
+                      {typeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  )}
+                  <select className="gcInput gcNarrow" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+                    <option value="">Sheet order</option>
+                    {idx.GAME >= 0 && <option value="GAME">Name</option>}
+                    {idx.YEAR >= 0 && <option value="YEAR">Year</option>}
+                    {idx.RATING >= 0 && <option value="RATING">BGG rating</option>}
+                    {idx.TIME >= 0 && <option value="TIME">Play time</option>}
                   </select>
-                )}
-                <select className="gcInput gcNarrow" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
-                  <option value="">Sort: sheet order</option>
-                  {idx.GAME >= 0 && <option value="GAME">Name</option>}
-                  {idx.YEAR >= 0 && <option value="YEAR">Year</option>}
-                  {idx.RATING >= 0 && <option value="RATING">BGG rating</option>}
-                  {idx.TIME >= 0 && <option value="TIME">Play time</option>}
-                </select>
-                {sortKey && (
-                  <button className="gcBtn gcGhost" onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>{sortDir === 'asc' ? '↑' : '↓'}</button>
-                )}
-              </div>
-              <div className="gcTableWrap">
-                <table className="gcTable">
-                  <thead><tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {entries.map(({ row, i }) => (
-                      <tr key={i}>
-                        {headers.map((_, j) => (
-                          <td key={j}>
-                            {j === idx.IMAGE && row[j] ? <img className="gcThumb" src={row[j]} alt="" /> : (row[j] || '')}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                    {!entries.length && <tr><td className="gcMuted" colSpan={headers.length || 1}>No games match those filters.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </section>
+                  {sortKey && (
+                    <button className="gcBtn gcSecondary gcSm" onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))} aria-label="Reverse sort order">{sortDir === 'asc' ? '↑' : '↓'}</button>
+                  )}
+                  <span className="gcShown">{entries.length} of {rows.length}</span>
+                </div>
+                <div className="gcTableWrap">
+                  <table className="gcTable">
+                    <thead><tr>{headers.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {entries.map(({ row, i }) => (
+                        <tr key={i}>
+                          {headers.map((_, j) => (
+                            <td key={j} className={j === idx.GAME ? 'gcName' : ''}>
+                              {j === idx.IMAGE && row[j] ? <img className="gcThumb" src={row[j]} alt="" /> : (row[j] || '')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                      {!entries.length && <tr><td className="gcEmpty" colSpan={headers.length || 1}>No games match those filters.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
-        <section className="gcCard">
-          <div className="gcCardHead">
-            <h2>Fill in missing info</h2>
-          </div>
-          {!settings.sheetLink ? (
-            <p className="gcMuted">Add your Google Sheet link above to use this.</p>
-          ) : (
-            <>
-              <div className="gcRow">
-                <button className="gcBtn gcPrimary" onClick={runEnrich} disabled={loading || !rows.length}>
-                  {enrichQueue ? 'Check again' : 'Find games missing info'}
-                </button>
+        {tab === 'decide' && (
+          <section className="gcCard gcDecide">
+            {!readyToCompare ? (
+              <p className="gcEmpty">Add your Google Sheet link and BoardGameGeek username in Settings to start deciding.</p>
+            ) : dec.status === 'loading' || dec.status === 'idle' ? (
+              <p className="gcEmpty">Reading your BGG collection and your Decisions tab… this can take a few seconds.</p>
+            ) : dec.status === 'error' ? (
+              <p className="gcEmpty gcError">{dec.error} <button className="gcLinkBtn" onClick={loadDecide}>Retry</button></p>
+            ) : (
+              <>
+                <div className="gcProgress">
+                  <div className="gcProgressTop">
+                    <span><b>{answeredOwned}</b> of {dec.total} decided</span>
+                    <span className="gcChips">
+                      <span className="gcChip gcKeepChip">Keep {counts.Keep}</span>
+                      <span className="gcChip gcDiscardChip">Discard {counts.Discard}</span>
+                      <span className="gcChip gcPlayChip">Play {counts['Play and see']}</span>
+                    </span>
+                  </div>
+                  <div className="gcBar"><div className="gcBarFill" style={{ width: `${dec.total ? Math.round((answeredOwned / dec.total) * 100) : 0}%` }} /></div>
+                </div>
+
+                {!!saving.failed.length && (
+                  <div className="gcAlert">
+                    Couldn't save {saving.failed.length} answer{saving.failed.length === 1 ? '' : 's'}: {saving.failed[saving.failed.length - 1].error}{' '}
+                    <button className="gcLinkBtn" onClick={retryFailed}>Retry saving</button>
+                  </div>
+                )}
+
+                {current ? (
+                  <div className="gcGame">
+                    {current.image ? <img className="gcPoster" src={current.image} alt="" /> : <div className="gcPoster gcNoPoster">🎲</div>}
+                    <div className="gcGameInfo">
+                      <h2 className="gcGameName">{current.name}</h2>
+                      <div className="gcFacts">
+                        {current.year && <span className="gcFact">{current.year}</span>}
+                        {(current.minPlayers || current.maxPlayers) && (
+                          <span className="gcFact">{current.minPlayers || '?'}{current.maxPlayers && current.maxPlayers !== current.minPlayers ? `–${current.maxPlayers}` : ''} players</span>
+                        )}
+                        {current.playTime && <span className="gcFact">{current.playTime} min</span>}
+                        {current.rating && <span className="gcFact">★ {current.rating}</span>}
+                      </div>
+                      {current.id && <a className="gcLinkBtn gcSmall" href={bggGameUrl(current.id)} target="_blank" rel="noreferrer">View on BoardGameGeek ↗</a>}
+                    </div>
+                    <div className="gcChoices">
+                      {CHOICES.map((c) => (
+                        <button key={c} className={`gcChoice ${CHOICE_CLASS[c]}`} onClick={() => decide(c)}>
+                          <span>{c}</span>
+                          <kbd>{CHOICE_KEY[c]}</kbd>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="gcEmpty">{dec.total ? 'You have decided on every game you own. 🎉' : 'No owned games found in your BGG collection.'}</p>
+                )}
+
+                <div className="gcDecideFoot">
+                  <button className="gcLinkBtn gcSmall" onClick={undoDecision} disabled={!history.length}>← Change my last answer</button>
+                  <span className="gcSaved">
+                    {saving.pending ? 'Saving…' : saving.sent ? `✓ ${saving.sent} saved to your sheet's “${DECISIONS_TAB}” tab` : `Answers go to the “${DECISIONS_TAB}” tab of your sheet`}
+                  </span>
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
+        {tab === 'manage' && (
+          <>
+            <section className="gcCard">
+              <div className="gcCardHead">
+                <h2>Sync from BGG</h2>
+                <span className="gcHint">Games you own on BGG that your sheet doesn't have yet</span>
               </div>
-              {enrichQueue && !enrichQueue.length && !review && <p className="gcMuted">Every row already has its BGG info filled in. 🎉</p>}
-              {enrichQueue && enrichQueue.length > 0 && !review && (
-                <p className="gcHint">Row: {cellAt(enrichQueue[0].row, idx.GAME)}{enrichQueue.length > 1 ? ` (+${enrichQueue.length - 1} more)` : ''}</p>
+              {!readyToCompare ? (
+                <p className="gcMuted">Add your Google Sheet link and BGG username in Settings so I can compare them.</p>
+              ) : (
+                <>
+                  <div className="gcRow">
+                    <button className="gcBtn gcPrimary" onClick={runSync} disabled={syncing || loading}>{syncing ? 'Checking your BGG collection…' : 'Check for missing games'}</button>
+                  </div>
+                  {syncError && <p className="gcError">{syncError}</p>}
+                  {missing && !syncing && (
+                    <p className="gcMuted">
+                      {missing.length ? `${missing.length} game${missing.length === 1 ? '' : 's'} on BGG ${missing.length === 1 ? "isn't" : "aren't"} in your sheet yet.` : 'Everything you own on BGG is already in your sheet. 🎉'}
+                    </p>
+                  )}
+                </>
               )}
-              {enrichBusy && <p className="gcMuted">Searching BGG…</p>}
-              {enrichError && <p className="gcError">{enrichError}</p>}
+              {review && review.source === 'sync' && reviewCard}
+            </section>
 
-              {!!enrichCandidates.length && review?.source !== 'enrich' && (
+            <section className="gcCard">
+              <div className="gcCardHead">
+                <h2>Fill in missing info</h2>
+                <span className="gcHint">Rows with blank year, players, time, rating or image</span>
+              </div>
+              {!settings.sheetLink ? (
+                <p className="gcMuted">Add your Google Sheet link in Settings to use this.</p>
+              ) : (
+                <>
+                  <div className="gcRow">
+                    <button className="gcBtn gcPrimary" onClick={runEnrich} disabled={loading || !rows.length}>
+                      {enrichQueue ? 'Check again' : 'Find games missing info'}
+                    </button>
+                  </div>
+                  {enrichQueue && !enrichQueue.length && !review && <p className="gcMuted">Every row already has its BGG info filled in. 🎉</p>}
+                  {enrichQueue && enrichQueue.length > 0 && !review && (
+                    <p className="gcHint">Row: {cellAt(enrichQueue[0].row, idx.GAME)}{enrichQueue.length > 1 ? ` (+${enrichQueue.length - 1} more)` : ''}</p>
+                  )}
+                  {enrichBusy && <p className="gcMuted">Searching BGG…</p>}
+                  {enrichError && <p className="gcError">{enrichError}</p>}
+
+                  {!!enrichCandidates.length && review?.source !== 'enrich' && (
+                    <div className="gcCandidates">
+                      {enrichCandidates.map((c) => (
+                        <button key={c.id} type="button" className="gcCandidate" onClick={() => pickEnrichCandidate(c)}>
+                          {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
+                          <span className="gcCandName">{c.name}</span>
+                          <span className="gcMuted">{c.year}{c.rating ? ` · ★${c.rating}` : ''}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {enrichQueue && enrichQueue.length > 0 && !enrichBusy && review?.source !== 'enrich' && (
+                    <div className="gcRow">
+                      <button className="gcBtn gcGhost" onClick={nextEnrichItem}>Skip this row</button>
+                      <button className="gcBtn gcGhost" onClick={saveEnrichWithoutMatch}>No BGG match — save extra info only</button>
+                    </div>
+                  )}
+                  {review && review.source === 'enrich' && reviewCard}
+                </>
+              )}
+            </section>
+
+            <section className="gcCard">
+              <div className="gcCardHead">
+                <h2>Add a game</h2>
+                <span className="gcHint">Search BGG, then add it to your sheet</span>
+              </div>
+              <form className="gcRow" onSubmit={searchAdd}>
+                <input className="gcInput gcGrow" placeholder="Game title…" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
+                <button className="gcBtn gcPrimary" type="submit" disabled={addBusy || !addTitle.trim()}>{addBusy ? 'Searching…' : 'Search BGG'}</button>
+              </form>
+              {addError && <p className="gcError">{addError}</p>}
+
+              {!!addCandidates.length && (
                 <div className="gcCandidates">
-                  {enrichCandidates.map((c) => (
-                    <button key={c.id} type="button" className="gcCandidate" onClick={() => pickEnrichCandidate(c)}>
+                  {addCandidates.map((c) => (
+                    <button key={c.id} type="button" className={`gcCandidate${review?.item.id === c.id && review.source === 'search' ? ' gcSelected' : ''}`} onClick={() => openReview({ item: c, title: addTitle, source: 'search' })}>
                       {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
                       <span className="gcCandName">{c.name}</span>
                       <span className="gcMuted">{c.year}{c.rating ? ` · ★${c.rating}` : ''}</span>
@@ -522,52 +793,25 @@ function Collection() {
                   ))}
                 </div>
               )}
-              {enrichQueue && enrichQueue.length > 0 && !enrichBusy && review?.source !== 'enrich' && (
-                <div className="gcRow">
-                  <button className="gcBtn gcGhost" onClick={nextEnrichItem}>Skip this row</button>
-                  <button className="gcBtn gcGhost" onClick={saveEnrichWithoutMatch}>No BGG match — save extra info only</button>
-                </div>
-              )}
-              {review && review.source === 'enrich' && reviewCard}
-            </>
-          )}
-        </section>
-
-        <section className="gcCard">
-          <h2>Add a game not on BGG yet</h2>
-          <form className="gcRow" onSubmit={searchAdd}>
-            <input className="gcInput" placeholder="Game title…" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
-            <button className="gcBtn gcPrimary" type="submit" disabled={addBusy || !addTitle.trim()}>{addBusy ? 'Searching…' : 'Search BGG'}</button>
-          </form>
-          {addError && <p className="gcError">{addError}</p>}
-
-          {!!addCandidates.length && (
-            <div className="gcCandidates">
-              {addCandidates.map((c) => (
-                <button key={c.id} type="button" className={`gcCandidate${review?.item.id === c.id && review.source === 'search' ? ' gcSelected' : ''}`} onClick={() => openReview({ item: c, title: addTitle, source: 'search' })}>
-                  {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
-                  <span className="gcCandName">{c.name}</span>
-                  <span className="gcMuted">{c.year}{c.rating ? ` · ★${c.rating}` : ''}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {review && review.source === 'search' && reviewCard}
-        </section>
+              {review && review.source === 'search' && reviewCard}
+            </section>
+          </>
+        )}
 
         <details className="gcCard gcRules">
           <summary>How this works</summary>
           <ul>
-            <li>The <b>collection view</b> and <b>BGG sync</b> read your Sheet and your public "owned" BGG list directly — nothing needs to be typed twice.</li>
+            <li>The <b>Collection</b> tab and <b>BGG sync</b> read your Sheet and your public "owned" BGG list directly — nothing needs to be typed twice.</li>
+            <li><b>Decide</b> shows one game you own at a time. Keep, Discard or Play and see (or press <kbd>K</kbd> <kbd>D</kbd> <kbd>P</kbd>) saves the game and your choice to a second tab of your sheet called <b>Decisions</b>, and the game doesn't come up again. Changed your mind? Use "Change my last answer", or answer it again later by editing the tab.</li>
             <li><b>Fill in missing info</b> looks at rows already in your sheet, searches BGG for each one, and — once you confirm the match — fills in only the blank cells, leaving anything you've already typed alone.</li>
-            <li>Both <b>adding</b> and <b>filling in missing info</b> write to your Sheet automatically once you set up the small script above — no login needed on this page. If you set the script up before this feature existed, open Apps Script and replace the code with the current version (same deployment, same URL — no need to change anything here).</li>
-            <li>BoardGameGeek has no way for another website to add to a collection there — not even for official apps — so if a game isn't on BGG yet, add it there yourself in the normal way; this page only reads what's already there.</li>
+            <li>Saving to the sheet works through the small script in Settings — no login needed on this page. If you set the script up before the Decide feature existed, paste in the latest code and redeploy it as a new version (same URL).</li>
+            <li>BoardGameGeek has no way for another website to add to a collection there, so if a game isn't on BGG yet, add it there yourself in the normal way; this page only reads what's already there.</li>
             <li>Add a <b>BGGID</b> column to your sheet (optional) and future syncs will match by BGG's own ID instead of the name, which is more reliable for reprints and renamed editions.</li>
             <li>Nothing here is sent anywhere but Google, BoardGameGeek, and your own browser's storage. This page keeps no database of its own.</li>
           </ul>
         </details>
       </div>
-    </body>
+    </div>
   );
 }
 

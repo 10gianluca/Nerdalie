@@ -17,7 +17,8 @@ async function callFn(path, params) {
 
 // ---------- Google Sheet ----------
 
-export const fetchSheetCsv = (sheetLink) => callFn('sheet', { link: sheetLink });
+// With `tab`, reads that named tab of the sheet instead of the first one.
+export const fetchSheetCsv = (sheetLink, tab) => callFn('sheet', tab ? { link: sheetLink, tab } : { link: sheetLink });
 
 export function parseCsv(text) {
   const rows = [];
@@ -368,6 +369,65 @@ export async function updateRowViaScript(scriptUrl, rowIndex, patch) {
     // some deployments reply with plain text; treat a 2xx as success either way
   }
   if (data && data.ok === false) throw new Error(data.error || 'The script reported an error');
+  return true;
+}
+
+// ---------- Keep / Discard / Play-and-see decisions ----------
+// Each answer is one row in a second tab of the sheet called "Decisions": the game in column A and the
+// choice in column B. The page reads that tab back so it never shows a game twice.
+
+export const DECISIONS_TAB = 'Decisions';
+export const CHOICES = ['Keep', 'Discard', 'Play and see'];
+
+// The Decisions tab as a Map of matchKey(game) -> { game, choice }. If the tab doesn't exist yet Google
+// answers with the first sheet instead, so anything whose header isn't exactly Game, Choice counts as empty.
+export function parseDecisions(text) {
+  const table = parseCsv(text || '');
+  const out = new Map();
+  if (!table.length) return out;
+  const head = table[0].map(normalizeHeader);
+  if (head[0] !== 'game' || head[1] !== 'choice') return out;
+  for (const row of table.slice(1)) {
+    const game = (row[0] || '').trim();
+    const choice = (row[1] || '').trim();
+    if (game && choice) out.set(matchKey(game), { game, choice });
+  }
+  return out;
+}
+
+export function shuffled(list, rng = Math.random) {
+  const a = list.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// The owned games that don't have an answer yet, in random order.
+export const undecidedGames = (owned, decisions, rng = Math.random) =>
+  shuffled(owned.filter((g) => !decisions.has(matchKey(g.name))), rng);
+
+// Saves one answer through the same Apps Script Web App. The script must reply { ok: true, kind: 'decision' }:
+// an older copy of the script (without the decision branch) doesn't, and that is reported instead of
+// silently looking like it worked.
+export async function saveDecisionViaScript(scriptUrl, game, choice) {
+  const res = await fetch(scriptUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ decision: { game, choice } }),
+  });
+  if (!res.ok) throw new Error(`The script replied with ${res.status}`);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {
+    // an old script answers with an HTML error page, which isn't JSON
+  }
+  if (data && data.ok === false) throw new Error(data.error || 'The script reported an error');
+  if (!data || data.kind !== 'decision') {
+    throw new Error('Your sheet script did not confirm saving. Open Settings, copy the latest script from the setup help into Apps Script, and redeploy it as a new version.');
+  }
   return true;
 }
 

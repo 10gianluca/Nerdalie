@@ -5,10 +5,12 @@
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS' };
 
 // Accepts a full share/edit link or a bare sheet ID; keeps a gid (a specific tab) if one is given.
-function extractCsvUrl(link) {
+// With `tab`, reads the tab with that name instead (used for the "Decisions" tab, whose gid isn't known).
+function extractCsvUrl(link, tab) {
   const s = String(link || '').trim();
   const idMatch = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/) || s.match(/^([A-Za-z0-9_-]{20,})$/);
   if (!idMatch) return null;
+  if (tab) return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(String(tab).slice(0, 100))}`;
   const gidMatch = s.match(/[?#&]gid=(\d+)/);
   const base = `https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=csv`;
   return gidMatch ? `${base}&gid=${gidMatch[1]}` : base;
@@ -17,8 +19,8 @@ function extractCsvUrl(link) {
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
-  const link = (event.queryStringParameters || {}).link;
-  const url = extractCsvUrl(link);
+  const { link, tab } = event.queryStringParameters || {};
+  const url = extractCsvUrl(link, tab);
   if (!url) return { statusCode: 400, headers: CORS, body: "That doesn't look like a Google Sheets link" };
 
   try {
