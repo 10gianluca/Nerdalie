@@ -16,8 +16,17 @@ function Qwinto() {
   const [minusScore, setMinusScore] = useState(0);
   const [rollButtonText, setRollButtonText] = useState('Roll');
   const [showRollButton, setShowRollButton] = useState(true);
-  const [previousInput, setPreviousInput] = useState(null); // Track the previously clicked input
+  const [, setPreviousInput] = useState(null); // Track the previously clicked input
   const [lockedInputs, setLockedInputs] = useState([]); // Track locked inputs
+  const [rolledOnce, setRolledOnce] = useState(false); // Track if a roll occurred this turn
+  const [rerollUsed, setRerollUsed] = useState(false); // Track if reroll used this turn
+  const [allowedRowColors, setAllowedRowColors] = useState([]); // Colors allowed this roll
+  const [lastAllowedRowColors, setLastAllowedRowColors] = useState([]); // For undo
+  const [lastPlacement, setLastPlacement] = useState(null); // { element, rowColor, index }
+  const [lastDiceTotal, setLastDiceTotal] = useState(0); // For undo
+  const [message, setMessage] = useState('Pick one or more dice, then press Roll.');
+  const [messageType, setMessageType] = useState('info'); // 'info' | 'error' | 'success'
+  const [showMisthrow, setShowMisthrow] = useState(false);
 
   const [orangeArray, setOrangeArray] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0]);
   const [yellowArray, setYellowArray] = useState([0, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -40,14 +49,106 @@ function Qwinto() {
     );
   };
 
+  const clearHighlights = () => {
+    const allInputs = document.querySelectorAll('.QwintoBoard input');
+    allInputs.forEach((input) => {
+      input.style.border = '';
+      input.style.outline = '';
+      input.classList.remove('validTarget');
+    });
+  };
+
+  const getValidTargets = (total, colors) => {
+    const valid = [];
+    const allInputs = document.querySelectorAll('.QwintoBoard input');
+    allInputs.forEach((input) => {
+      const rowClassName = input.parentNode.className;
+      const rowColor = rowClassName.includes('orangeRange')
+        ? 'orange'
+        : rowClassName.includes('yellowRange')
+        ? 'yellow'
+        : rowClassName.includes('purpleRange')
+        ? 'purple'
+        : '';
+
+      // Determine index within the parent (column index including spaces)
+      const siblings = Array.from(input.parentNode.children);
+      const columnIndex = siblings.indexOf(input);
+
+      // Column duplicate check helper
+      const columnHasDuplicate = () => {
+        const board = input.closest('.QwintoBoard');
+        if (!board) return false;
+        const rows = [
+          board.querySelector('.orangeRange'),
+          board.querySelector('.yellowRange'),
+          board.querySelector('.purpleRange'),
+        ];
+        return rows.some((row) => {
+          if (!row || row === input.parentNode) return false;
+          const cell = row.children[columnIndex];
+          if (!cell || cell.classList.contains('QwintoSpaceSquare')) return false;
+          const v = parseInt(cell.value, 10);
+          return !isNaN(v) && v === total;
+        });
+      };
+
+      // Determine position index in array (skip space squares)
+      let actualIndex = -1;
+      for (let i = 0; i < siblings.length; i++) {
+        if (!siblings[i].classList.contains('QwintoSpaceSquare')) actualIndex++;
+        if (siblings[i] === input) break;
+      }
+
+      const currentArray =
+        rowColor === 'orange'
+          ? orangeArray
+          : rowColor === 'yellow'
+          ? yellowArray
+          : rowColor === 'purple'
+          ? purpleArray
+          : null;
+
+      const respectsOrder = () => {
+        if (!currentArray) return false;
+        return currentArray.every((value, idx) => {
+          if (value === 0) return true;
+          if (idx < actualIndex && value >= total) return false;
+          if (idx > actualIndex && value !== 0 && value <= total) return false;
+          return true;
+        });
+      };
+
+      if (colors.includes(rowColor) && input.value === '' && !columnHasDuplicate() && respectsOrder() && currentArray && !currentArray.includes(total)) {
+        valid.push(input);
+      }
+    });
+    return valid;
+  };
+
+  const highlightValidTargets = (total, colors) => {
+    clearHighlights();
+    const valid = getValidTargets(total, colors);
+    valid.forEach((el) => el.classList.add('validTarget'));
+    return valid.length;
+  };
+
   const rollDice = () => {
     console.log("rollDice function called");
 
     // Check if no dice were clicked
     const anyDiceClicked = dice.some((die) => die.clicked);
     if (!anyDiceClicked) {
-      alert("Please click at least one die before rolling!");
+      setMessageType('error');
+      setMessage('Select at least one die before rolling.');
       return; // Exit the function early if no dice were clicked
+    }
+
+    // Prevent more than one reroll per placement
+    if (rolledOnce && rerollUsed) {
+      setMessageType('error');
+      setMessage('Place your number before rolling again.');
+      return;
     }
 
     const updatedDice = dice.map((die) => {
@@ -74,48 +175,28 @@ function Qwinto() {
 
     setDiceTotal(total);
 
-    if (rollButtonText === "Roll") {
+    if (!rolledOnce) {
       setRollButtonText("Reroll");
+      setRolledOnce(true);
     } else {
-      setShowRollButton(false);
+      setRerollUsed(true);
     }
 
     const allowedColors = updatedDice
       .filter((die) => die.clicked && die.value !== "")
       .map((die) => die.color);
     console.log("Allowed Colors:", allowedColors);
+    setAllowedRowColors(allowedColors);
+    const count = highlightValidTargets(total, allowedColors);
 
-    const allInputs = document.querySelectorAll(".QwintoBoard input");
+    if (allowedColors.length > 0) {
+      const names = allowedColors.map(c => c[0].toUpperCase() + c.slice(1)).join(' / ');
+      setMessageType('info');
+      setMessage(count > 0 ? `Place ${total} in: ${names}` : `No legal placements in: ${names}. ${!rolledOnce || !rerollUsed ? 'You may reroll.' : 'Mark a misthrow (-5).'}`);
+    }
 
-    // Iterate over every input and check if it breaks any rules
-    allInputs.forEach((input) => {
-      const rowClassName = input.parentNode.className;
-      const rowColor = rowClassName.includes("orangeRange")
-        ? "orange"
-        : rowClassName.includes("yellowRange")
-        ? "yellow"
-        : rowClassName.includes("purpleRange")
-        ? "purple"
-        : "";
-
-      const rowValues = getRowValues(rowClassName);
-      console.log(`Row ${rowColor} Values:`, rowValues); // Log every number in the row
-
-      if (
-        allowedColors.includes(rowColor) && // Row color matches allowed colors
-        input.value === "" // Input is empty
-      ) {
-        input.style.border = "2px solid neon green"; // Highlight valid input with neon green border
-        input.style.outline = "none"; // Clear any outline that might obscure the border
-        console.log(
-          `Valid placement found for value ${total} in row ${rowColor}. Border changed to neon green.`
-        );
-      } else {
-        console.log(
-          `Invalid placement for value ${total} in row ${rowColor}.`
-        );
-      }
-    });
+    // Show misthrow button only if no valid targets and reroll already used
+    setShowMisthrow(rolledOnce && rerollUsed && count === 0);
   };
 
   const handleMinusClick = (id) => {
@@ -149,6 +230,7 @@ function Qwinto() {
       : null;
   };
 
+  // eslint-disable-next-line no-unused-vars
   const getRowValues = (rowClassName) => {
     const inputs = document.querySelectorAll(`.${rowClassName} input`);
     return Array.from(inputs)
@@ -159,6 +241,12 @@ function Qwinto() {
   const handleInputClick = (e) => {
     if (lockedInputs.includes(e.target)) {
         return; // Prevent editing of locked inputs
+    }
+
+    if (diceTotal <= 0) {
+        setMessageType('error');
+        setMessage('Roll the dice first.');
+        return;
     }
 
     const rowClassName = e.target.parentNode.className;
@@ -175,7 +263,8 @@ function Qwinto() {
         .map((die) => die.color);
 
     if (!allowedColors.includes(rowColor)) {
-        alert(`You can only place numbers in the ${allowedColors.join(", ")} rows!`);
+        setMessageType('error');
+        setMessage(`You can only place numbers in: ${allowedColors.join(" / ")}.`);
         return;
     }
 
@@ -201,9 +290,33 @@ function Qwinto() {
         currentArray = purpleArray;
     }
 
+    // Column duplicate rule: no same number in the same column across rows
+    const siblings = Array.from(e.target.parentNode.children);
+    const columnIndex = siblings.indexOf(e.target);
+    const board = e.target.closest('.QwintoBoard');
+    if (board) {
+        const rows = [
+            board.querySelector('.orangeRange'),
+            board.querySelector('.yellowRange'),
+            board.querySelector('.purpleRange'),
+        ];
+        for (const row of rows) {
+            if (!row || row === e.target.parentNode) continue;
+            const cell = row.children[columnIndex];
+            if (!cell || cell.classList.contains('QwintoSpaceSquare')) continue;
+            const v = parseInt(cell.value, 10);
+            if (!isNaN(v) && v === diceTotal) {
+                setMessageType('error');
+                setMessage(`That column already has ${diceTotal}. Choose a different spot.`);
+                return;
+            }
+        }
+    }
+
     // Check if the rolled number already exists in the color array
     if (currentArray.includes(diceTotal)) {
-        alert(`You cannot place the number ${diceTotal} in the ${rowColor} row because it already exists.`);
+        setMessageType('error');
+        setMessage(`${diceTotal} already exists in the ${rowColor} row.`);
         return;
     }
 
@@ -216,49 +329,12 @@ function Qwinto() {
     });
 
     if (!isValidPlacement) {
-        alert(`Invalid placement. The number ${diceTotal} must be larger than numbers before it and smaller than numbers after it.`);
+        setMessageType('error');
+        setMessage(`Invalid. ${diceTotal} must be larger than numbers before and smaller than numbers after.`);
         return;
     }
 
     if (diceTotal > 0) {
-        if (previousInput && previousInput !== e.target) {
-            let previousActualIndex = -1;
-            const previousInputs = Array.from(previousInput.parentNode.children);
-            for (let i = 0; i < previousInputs.length; i++) {
-                if (!previousInputs[i].classList.contains("QwintoSpaceSquare")) {
-                    previousActualIndex++;
-                }
-                if (previousInputs[i] === previousInput) {
-                    break;
-                }
-            }
-
-            const previousRowColor = previousInput.parentNode.className.includes("orangeRange")
-                ? "orange"
-                : previousInput.parentNode.className.includes("yellowRange")
-                ? "yellow"
-                : previousInput.parentNode.className.includes("purpleRange")
-                ? "purple"
-                : "";
-
-            // Reset the previous input to 0 in the array and clear the input box
-            if (previousRowColor === "orange") {
-                const newOrangeArray = [...orangeArray];
-                newOrangeArray[previousActualIndex] = 0;
-                setOrangeArray(newOrangeArray);
-            } else if (previousRowColor === "yellow") {
-                const newYellowArray = [...yellowArray];
-                newYellowArray[previousActualIndex] = 0;
-                setYellowArray(newYellowArray);
-            } else if (previousRowColor === "purple") {
-                const newPurpleArray = [...purpleArray];
-                newPurpleArray[previousActualIndex] = 0;
-                setPurpleArray(newPurpleArray);
-            }
-
-            previousInput.value = ""; // Clear the value of the previous input box
-        }
-
         // Update the corresponding array based on the row color
         if (rowColor === "orange") {
             const newOrangeArray = [...orangeArray];
@@ -275,14 +351,114 @@ function Qwinto() {
         }
 
         e.target.value = diceTotal; // Insert the diceTotal into the clicked box
-        setPreviousInput(e.target); // Track the current box as the previous one
+        e.target.setAttribute('readOnly', true);
+        setLockedInputs((prev) => [...prev, e.target]);
+        setPreviousInput(null);
+
+        // Save for undo
+        setLastPlacement({ element: e.target, rowColor, index: actualIndex });
+        setLastDiceTotal(diceTotal);
+        setLastAllowedRowColors(allowedRowColors);
+
+        // Clear turn state: dice selections, totals, highlights, and roll button state
+        setDice((prevDice) => prevDice.map((d) => ({ ...d, value: '', clicked: false })));
+        setDiceTotal(0);
+        setRollButtonText('Roll');
+        setShowRollButton(true);
+        setRolledOnce(false);
+        setRerollUsed(false);
+        clearHighlights();
+        setAllowedRowColors([]);
+
+        setMessageType('success');
+        setMessage(`Placed ${diceTotal}. Pick dice and Roll again.`);
+        setShowMisthrow(false);
     }
 };
+
+  const undoPlacement = () => {
+    if (!lastPlacement) {
+      setMessageType('info');
+      setMessage('Nothing to undo.');
+      return;
+    }
+    const { element, rowColor, index } = lastPlacement;
+    // Clear element
+    element.value = '';
+    element.removeAttribute('readOnly');
+    setLockedInputs((prev) => prev.filter((el) => el !== element));
+
+    // Reset arrays
+    if (rowColor === 'orange') {
+      const arr = [...orangeArray];
+      arr[index] = 0;
+      setOrangeArray(arr);
+    } else if (rowColor === 'yellow') {
+      const arr = [...yellowArray];
+      arr[index] = 0;
+      setYellowArray(arr);
+    } else if (rowColor === 'purple') {
+      const arr = [...purpleArray];
+      arr[index] = 0;
+      setPurpleArray(arr);
+    }
+
+    // Restore turn state to placement phase (after reroll)
+    setDiceTotal(lastDiceTotal);
+    setRolledOnce(true);
+    setRerollUsed(true); // prevent more rolls; only place
+    setRollButtonText('Reroll');
+    setShowRollButton(true);
+    setAllowedRowColors(lastAllowedRowColors);
+    highlightValidTargets(lastDiceTotal, lastAllowedRowColors);
+    setLastPlacement(null);
+    setMessageType('info');
+    setMessage(`Moved ${lastDiceTotal}. Pick another valid cell.`);
+    setShowMisthrow(false);
+  };
+
+  const selectedCount = dice.filter((d) => d.clicked).length;
+  const rollDisabled = selectedCount === 0 || (rolledOnce && rerollUsed);
+  const stepLabel = diceTotal > 0
+    ? (rerollUsed ? 'Place' : rolledOnce ? 'Reroll or Place' : 'Roll')
+    : 'Roll';
+
+  const handleMisthrow = () => {
+    if (!showMisthrow) return;
+    setMinusScore((prev) => prev + 5);
+    // Reset the turn state as if a placement finished
+    setDice((prevDice) => prevDice.map((d) => ({ ...d, value: '', clicked: false })));
+    setDiceTotal(0);
+    setRollButtonText('Roll');
+    setShowRollButton(true);
+    setRolledOnce(false);
+    setRerollUsed(false);
+    clearHighlights();
+    setAllowedRowColors([]);
+    setShowMisthrow(false);
+    setMessageType('info');
+    setMessage('Misthrow marked (-5). Pick dice and Roll.');
+  };
 
 
 
   const calculateScore = () => {
-
+    const scoreIds = [
+      'orangeRowScore',
+      'yellowRowScore',
+      'purpleRowScore',
+      'boxScore1',
+      'boxScore2',
+      'boxScore3',
+      'boxScore4',
+      'boxScore5',
+    ];
+    const total = scoreIds.reduce((sum, id) => {
+      const el = document.getElementById(id);
+      const v = el ? parseInt(el.value, 10) : NaN;
+      return sum + (isNaN(v) ? 0 : v);
+    }, 0);
+    return total - minusScore;
   };
 
   const Done = () => {
@@ -411,6 +587,16 @@ function Qwinto() {
           </button>
         </div>
       </nav>
+      <div className="hud">
+        <div className={`toast ${messageType}`}>{message}</div>
+        <div className="status">
+          <div className="statusItem"><span className="label">Step:</span> {stepLabel}</div>
+          <div className="statusItem"><span className="label">Total:</span> {diceTotal || '-'}</div>
+          <div className="statusItem"><span className="label">Allowed:</span> {allowedRowColors.length ? allowedRowColors.map(c => (
+            <span key={c} className={`tag ${c}`}>{c}</span>
+          )) : <span className="muted">—</span>}</div>
+        </div>
+      </div>
       <div className="Board">
         <header className="Board-header">
           <img className="boredBackground" src="" alt="" />
@@ -729,7 +915,7 @@ function Qwinto() {
                 className={`die ${die.id}`}
                 id={die.id}
                 onClick={() => handleDiceClick(die.id)}
-                style={{ borderColor: die.clicked ? "red" : "black" }}
+                style={{ borderColor: die.clicked ? 'red' : 'black' }}
               >
                 {renderPips(die.value)}
               </div>
@@ -740,10 +926,18 @@ function Qwinto() {
               value={diceTotal}
             />
             {showRollButton && (
-              <button onClick={rollDice} className="rollButton">
+              <button onClick={rollDice} className="rollButton" disabled={rollDisabled}>
                 {rollButtonText}
               </button>
             )}
+            {showMisthrow && (
+              <button onClick={handleMisthrow} className="rollButton">
+                Misthrow -5
+              </button>
+            )}
+            <button onClick={undoPlacement} className="rollButton">
+              Undo
+            </button>
             <button onClick={Done} className="rollButton">
               Done
             </button>

@@ -120,6 +120,9 @@ h1{
     font-family: Arial, sans-serif;
     font-size: 40px;
     text-align: center;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    background-color: rgba(255,255,255,0.95);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .orangeRange, .yellowRange, .purpleRange {
@@ -132,7 +135,7 @@ h1{
 }
 
 .orangeRange{
-    background-color: rgb(249, 98, 43);}
+    background-color: rgb(249, 98, 43);} 
 .yellowRange{
     background-color: gold;
 }
@@ -153,8 +156,8 @@ h1{
 }
 .rollButton{
     box-sizing: border-box;
-    width: 80px;
-    height: 50px;
+    width: 90px;
+    height: 48px;
     padding: 0;
     margin: 8px;
     font-family: Arial, sans-serif;
@@ -163,5 +166,77 @@ h1{
     text-align: center;
     border-radius: 13%;
     vertical-align: middle;
+}
+
+/* Highlight for valid placement targets */
+.validTarget {
+    border: 2px solid #39ff14 !important;
+    box-shadow: 0 0 0 2px rgba(57, 255, 20, 0.25);
+}
+
+.hud {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    font-family: Arial, sans-serif;
+}
+.toast {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 16px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.6);
+}
+.toast.error {
+    background-color: rgba(200, 0, 0, 0.85);
+}
+.toast.success {
+    background-color: rgba(0, 140, 60, 0.85);
+}
+.status {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.statusItem {
+    background-color: rgba(255, 255, 255, 0.85);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+}
+.statusItem .label {
+    font-weight: bold;
+    margin-right: 4px;
+}
+.tag {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 8px;
+    border-radius: 8px;
+    color: white;
+    font-size: 12px;
+    text-transform: capitalize;
+}
+.tag.orange {
+    background-color: rgb(249, 98, 43);
+}
+.tag.yellow {
+    background-color: gold;
+    color: black;
+}
+.tag.purple {
+    background-color: rgb(162, 0, 255);
+}
+.muted {
+    color: #888;
 }
 
