@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Toy Battle Online</title>
+  <meta name="description" content="Play the Toy Battle strategy game online with a friend, or on your own against the computer.">
+  <meta name="theme-color" content="#e6f1ff">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
+  <script src="troops.js" defer></script>
+  <script src="boards.js" defer></script>
+  <script src="game.js" defer></script>
+  <script src="bot.js" defer></script>
+  <script src="art.js" defer></script>
+  <script src="net.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main id="home" class="screen">
+    <a class="back" href="../">&larr; Back to the site</a>
+    <div class="brand">
+      <h1>Toy Battle</h1>
+      <p>The toy-box war game, online with a friend</p>
+    </div>
+    <div class="stack">
+      <label class="field"><span>Your name</span>
+        <input id="nameInput" class="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
+      </label>
+      <label class="field"><span>Battlefield</span>
+        <select id="terrainSelect" class="text"></select>
+        <small id="terrainBlurb" class="blurb"></small>
+      </label>
+      <button id="createBtn" class="btn primary big">Create a game</button>
+      <div class="divider">or join a friend's game</div>
+      <form id="joinForm" class="join">
+        <input id="codeInput" class="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+        <button class="btn primary" type="submit">Join</button>
+      </form>
+      <div class="divider">or play on your own against the computer</div>
+      <div class="solo">
+        <div class="levels" role="group" aria-label="Difficulty">
+          <button type="button" class="lvl" data-level="easy">Easy</button>
+          <button type="button" class="lvl" data-level="normal">Normal</button>
+          <button type="button" class="lvl" data-level="hard">Hard</button>
+        </div>
+        <button id="soloBtn" class="btn big" type="button">Play solo</button>
+      </div>
+      <button id="resumeBtn" class="btn" hidden></button>
+    </div>
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>Two armies of toy troops fight over a board of <b>bases</b> joined by <b>paths</b>. You win by placing a troop on the <b>enemy H.Q.</b>, or by being first to win the number of <b>medals</b> shown for your side.</li>
+        <li>On your turn do <b>one</b> thing: <b>draw 2 troops</b> from your reserve onto your rack (it holds 8), or <b>place 1 troop</b> on the board and use its effect.</li>
+        <li>A troop can go on an <b>empty base</b>, on <b>one of your own</b>, or on an <b>enemy base holding a strictly weaker troop</b> (a stack builds up, but only the top troop counts). Every placement must be <b>connected to your H.Q.</b> by paths running only through bases you hold.</li>
+        <li>Hold every base around a <b>region</b> and you take its medals, and keep them even if you lose a base later.</li>
+        <li>If a player can't draw or place a troop, the game ends: more medals wins, and on a tie the player who got stuck loses.</li>
+        <li>Each troop has its own effect (tap <b>Troops &amp; terrain</b> in a game to read them), and each battlefield has special bases.</li>
+      </ul>
+      <p class="note">The troops, their strengths and effects, the special bases and the rules follow the official game. The eight battlefield layouts here are this app's own designs, and the artwork is original.</p>
+    </details>
+  </main>
+
+  <main id="lobby" class="screen lobby" hidden>
+    <p class="eyebrow">Room code</p>
+    <div id="lobbyCode" class="code"></div>
+    <p id="lobbyMsg"></p>
+    <div class="row">
+      <button id="shareBtn" class="btn primary">Share invite</button>
+      <button id="copyBtn" class="btn">Copy link</button>
+    </div>
+    <button id="cancelBtn" class="btn ghost">Cancel</button>
+  </main>
+
+  <main id="game" class="screen" hidden>
+    <header class="topbar">
+      <div class="room"><span id="netDot" class="dot"></span><span id="roomLabel">Room</span> <b id="roomCode"></b></div>
+      <button id="leaveBtn" class="btn ghost">Leave</button>
+    </header>
+    <div id="netBanner" class="banner" hidden></div>
+
+    <section class="panel">
+      <div id="scoreboard" class="scoreboard"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span id="terrainName" class="name"></span><span id="boardHint" class="hint"></span></div>
+      <div id="board" class="board"></div>
+      <p id="terrainRule" class="terrain-rule"></p>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Your troops</span><span id="rackHint" class="hint"></span></div>
+      <div id="rack" class="rack"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Discard</span><span id="discardHint" class="hint"></span></div>
+      <div id="discard" class="discard"></div>
+    </section>
+
+    <details class="panel ref">
+      <summary>Troops &amp; terrain</summary>
+      <div id="reference"></div>
+    </details>
+
+    <p id="lastTurn" class="last"></p>
+
+    <div id="bar" class="bar" aria-live="polite">
+      <p id="status" class="status"></p>
+      <div id="actions" class="actions"></div>
+    </div>
+  </main>
+
+  <dialog id="overDialog">
+    <div class="result">
+      <h2 id="overTitle"></h2>
+      <p id="overWhy" class="why"></p>
+      <div class="row">
+        <button id="nextBtn" class="btn primary">Play again</button>
+        <button id="closeOverBtn" class="btn">View board</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

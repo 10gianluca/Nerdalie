@@ -34,6 +34,10 @@ function Home() {
     e.preventDefault();
     window.location.href = `${process.env.PUBLIC_URL}/hocus-pocus/`;
   };
+  const navToyBattle = (e) => {
+    e.preventDefault();
+    window.location.href = `${process.env.PUBLIC_URL}/toy-battle/`;
+  };
   // Collection is a real React route (it needs client state/settings), not a public/ static page.
   const navCollection = (e) => {
     e.preventDefault();
@@ -52,6 +56,7 @@ function Home() {
         <button className="lostButton" id="buttons" onClick={navLostCities}> LOST CITIES</button>
         <button className="scoutButton" id="buttons" onClick={navScout}> SCOUT</button>
         <button className="hocusButton" id="buttons" onClick={navHocusPocus}> HOCUS POCUS</button>
+        <button className="toyButton" id="buttons" onClick={navToyBattle}> TOY BATTLE</button>
         <button className="collectionButton" id="buttons" onClick={navCollection}> GAME LIST</button>
 
       </div>

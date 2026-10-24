@@ -51,6 +51,7 @@ html, body {
 .lostButton,
 .scoutButton,
 .hocusButton,
+.toyButton,
 .collectionButton,
 .loveButton {
   display: inline-block;
@@ -74,6 +75,7 @@ html, body {
 .agentButton,
 .lostButton,
 .hocusButton,
+.toyButton,
 .collectionButton {
   width: auto;
   min-width: 150px;
