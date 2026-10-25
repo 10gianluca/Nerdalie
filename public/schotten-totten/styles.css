@@ -1,0 +1,91 @@
+@font-face {
+  font-family: "heart";
+  src: url("Merisa-gxvMY.ttf") format("truetype");
+  font-display: swap;
+}
+
+/* ---------- theme: the highlands ---------- */
+:root {
+  --bg: #d9ddc9;
+  --surface: #f2f3e6;
+  --ink: #26301f;
+  --muted: #667058;
+  --line: #b9c1a3;
+  --accent: #6b3f86;
+  --accent-dark: #4b2a60;
+  --on-accent: #f7ecff;
+  --good: #3b7d4a;
+  --bad: #b3361f;
+  --mine: #3b7d4a;
+  --theirs: #6b3f86;
+}
+body {
+  background:
+    radial-gradient(ellipse at 50% 0%, #eef0dc 0%, #d6dcc2 55%, #bcc6a4 100%) fixed;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='40' viewBox='0 0 80 40'%3E%3Cpath d='M0 40 L20 12 L34 30 L50 6 L80 40' fill='none' stroke='%23556b3e' stroke-width='1.2' opacity='.18'/%3E%3C/svg%3E");
+}
+.screen { z-index: 1; }
+.screen.wide { max-width: 720px; }
+.brand h1 { font-size: 2.8rem; text-shadow: 2px 2px 0 rgb(107 63 134 / 0.25); }
+.panel { box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px var(--line), var(--shadow); }
+.area-head .name { font-family: "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.05rem; }
+.area-head.foot { margin: 10px 4px 0; }
+
+/* ---------- scoreboard ---------- */
+.scoreboard { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.scoreboard .who { display: grid; gap: 2px; text-align: center; flex: 1; min-width: 0; }
+.scoreboard .who span { font-size: 0.8rem; font-weight: 700; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scoreboard .who b { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.scoreboard .who small { font-size: 0.72rem; color: var(--muted); font-weight: 700; }
+.scoreboard .who.turn span::after { content: ' · playing'; color: var(--accent); }
+.scoreboard .mid { text-align: center; font-size: 0.75rem; color: var(--muted); font-weight: 700; line-height: 1.4; }
+.scoreboard .mid b { display: block; color: var(--ink); font-size: 0.95rem; }
+
+/* ---------- the stones ---------- */
+.stones { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; margin-top: 6px; }
+.stone {
+  appearance: none; border: 0; margin: 0; padding: 3px 2px; font: inherit; color: inherit; border-radius: 8px; background: rgb(0 0 0 / 0.05);
+  display: grid; grid-template-rows: auto auto auto; gap: 3px; align-content: start; justify-items: stretch; cursor: default; position: relative;
+}
+.stone.target { cursor: pointer; background: rgb(107 63 134 / 0.14); box-shadow: inset 0 0 0 2px var(--accent); animation: glow 1.2s ease-in-out infinite; }
+.stone.chosen { background: rgb(107 63 134 / 0.28); box-shadow: inset 0 0 0 3px var(--accent); }
+.stone.mine { background: rgb(59 125 74 / 0.2); box-shadow: inset 0 0 0 2px var(--mine); }
+.stone.theirs { background: rgb(107 63 134 / 0.2); box-shadow: inset 0 0 0 2px var(--theirs); }
+.side { display: grid; gap: 2px; align-content: start; min-height: calc(3 * (var(--ch, 40px) + 2px)); }
+.side.opp { align-content: end; }
+.slot { aspect-ratio: 3 / 4; border-radius: 4px; box-shadow: inset 0 0 0 1.5px rgb(0 0 0 / 0.14); background: rgb(255 255 255 / 0.25); }
+.rock { text-align: center; font-size: 0.8rem; line-height: 1; padding: 2px 0; font-weight: 800; color: var(--muted); }
+.stone.mine .rock { color: var(--mine); }
+.stone.theirs .rock { color: var(--theirs); }
+.fm { text-align: center; font-size: 0.56rem; line-height: 1.1; font-weight: 800; color: var(--muted); min-height: 1.1em; letter-spacing: -0.01em; }
+
+/* ---------- cards ---------- */
+.tcard {
+  appearance: none; border: 0; padding: 0; margin: 0; width: 100%; aspect-ratio: 3 / 4; border-radius: 5px; position: relative;
+  display: grid; place-items: center; font-weight: 800; font-size: clamp(0.8rem, 3.2vw, 1.15rem); line-height: 1; font-variant-numeric: tabular-nums;
+  color: #fff; background: linear-gradient(160deg, var(--c), var(--c2)); box-shadow: 0 0 0 1.5px var(--c2), 0 1px 2px rgb(0 0 0 / 0.3); cursor: default;
+  transition: transform 0.12s ease, box-shadow 0.12s;
+}
+.tcard::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at 30% 20%, rgb(255 255 255 / 0.3), transparent 55%); pointer-events: none; }
+.tcard small { position: absolute; left: 0; right: 0; bottom: 2px; font-size: 0.5rem; letter-spacing: 0.02em; opacity: 0.85; text-transform: uppercase; }
+.c-R { --c: #d94c43; --c2: #99281f; }
+.c-O { --c: #f08d2e; --c2: #b2600f; }
+.c-Y { --c: #ecca2e; --c2: #b3921a; color: #3b3005; }
+.c-G { --c: #4fa75e; --c2: #2d6f3b; }
+.c-B { --c: #4382d6; --c2: #274f94; }
+.c-P { --c: #8f58bd; --c2: #5c3280; }
+.tcard.last { box-shadow: 0 0 0 2.5px #fff, 0 0 0 4.5px var(--accent); }
+.hand { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; padding-top: 6px; }
+.hand .tcard { font-size: clamp(1.2rem, 6vw, 1.9rem); border-radius: 9px; }
+.hand .tcard small { font-size: clamp(0.5rem, 2.2vw, 0.65rem); bottom: 5px; }
+.hand .tcard.pickable { cursor: pointer; }
+.hand .tcard.pickable:hover, .hand .tcard.pickable:focus-visible { transform: translateY(-3px); }
+.hand .tcard.sel { transform: translateY(-7px); box-shadow: 0 0 0 3px var(--ink), 0 8px 14px rgb(0 0 0 / 0.3); }
+.tcard.preview { opacity: 0.55; outline: 2px dashed var(--ink); outline-offset: -2px; }
+@media (max-width: 420px) {
+  .stones { gap: 2px; }
+  .hand { gap: 5px; }
+}

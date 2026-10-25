@@ -215,6 +215,27 @@ html, body { margin: 0; padding: 0; }
 .gcPickDone { padding: 24px 0; text-align: center; color: var(--muted); }
 .gcPickDone p { margin: 0 0 14px; }
 
+/* ---------- plays ---------- */
+.gcPlayForm { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.gcSpan2 { grid-column: 1 / -1; }
+.gcPlayForm .gcRow { margin-top: 0; }
+.gcPlayForm .gcField small { font-weight: 400; color: var(--muted); }
+.gcWinnerInput { width: 180px; height: 32px; font-size: 13px; }
+.gcStatRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 4px 0 6px; }
+.gcStat { padding: 12px 14px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; }
+.gcStat b { display: block; color: var(--ink); font-size: 24px; line-height: 1.1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.gcStat span { color: var(--muted); font-size: 12.5px; }
+.gcSubhead { margin: 18px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.gcList { list-style: none; margin: 0; padding: 0; }
+.gcList li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.gcList li:last-child { border-bottom: none; }
+.gcList li b { color: var(--ink); overflow-wrap: anywhere; }
+.gcList li span { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gcPlaysWrap { max-height: 46vh; border: 1px solid var(--line); border-radius: 10px; }
+.gcTable td.gcNotes { white-space: normal; min-width: 160px; color: var(--muted); }
+.gcLast { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
+.gcFact.gcPriority { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+
 /* ---------- how it works ---------- */
 .gcRules { padding: 0; }
 .gcRules summary { padding: 14px 20px; cursor: pointer; font-weight: 650; color: var(--ink); }
@@ -222,12 +243,11 @@ html, body { margin: 0; padding: 0; }
 .gcRules li { margin-bottom: 8px; color: var(--text); font-size: 14px; }
 
 /* ---------- small screens ---------- */
-/* five tabs don't fit across a phone with their count badges, and the tab matters more than the number */
-@media (max-width: 440px) {
-  .gcTab .gcCount { display: none; }
-  .gcTab { padding-left: 8px; padding-right: 8px; }
-}
 @media (max-width: 640px) {
+  /* seven tabs don't fit in one row on a phone, so they wrap onto a second */
+  .gcTabs { flex-wrap: wrap; overflow: visible; }
+  .gcTab { flex: 1 1 auto; justify-content: center; margin-bottom: 0; }
+  .gcPlayForm { grid-template-columns: 1fr; }
   .gcWrap { padding: 14px 12px 60px; }
   .gcTitle { font-size: 24px; }
   .gcCard { padding: 16px; border-radius: 10px; }

@@ -14,6 +14,7 @@
     del: (k) => { try { localStorage.removeItem(k); } catch (_) { /* private mode */ } },
   };
   const SESSION_KEY = 'lostcities.session';
+  const hub = window.NerdalieHub ? window.NerdalieHub.game('lost-cities', 'Lost Cities') : null;
 
   const app = {
     role: null, // 'host' | 'guest'
@@ -269,6 +270,7 @@
     clearTimeout(botTimer);
     Object.assign(app, { solo: false, role: null, session: null, state: null, net: null, connected: false, guestLink: null, sel: null, busy: false });
     store.del(SESSION_KEY);
+    if (hub) hub.leave();
     if ($('overDialog').open) $('overDialog').close();
     history.replaceState(null, '', location.pathname);
     document.title = 'Lost Cities Online';
@@ -477,12 +479,20 @@
 
     const needsMe = (s.phase === 'play' || s.phase === 'draw') && s.active === me;
     document.title = needsMe ? '🧭 Your move · Lost Cities' : 'Lost Cities Online';
+    if (hub) hub.sync({ needsMe, over: s.phase === 'over' && s.round >= RULES.rounds, solo: app.solo, opponent: s.players[1 - me].name, level: app.session && app.session.level, code: app.session && app.session.code });
 
     if (s.phase === 'over' && !app.overShown) {
       app.overShown = true;
+      if (hub && app.session && !app.session.recorded && s.round >= RULES.rounds) {
+        app.session.recorded = true;
+        store.set(SESSION_KEY, app.session);
+        const t = s.totals;
+        hub.finish({ mode: app.solo ? 'solo' : 'online', level: app.solo ? app.session.level : '', opponent: app.solo ? 'Computer' : s.players[1 - me].name, outcome: t[me] > t[1 - me] ? 'win' : t[me] < t[1 - me] ? 'loss' : 'draw', detail: `${t[me]} vs ${t[1 - me]}` });
+      }
       setTimeout(openOver, 900);
     } else if (s.phase !== 'over') {
       app.overShown = false;
+      if (app.session) app.session.recorded = false;
       if ($('overDialog').open) $('overDialog').close();
     }
   }
@@ -617,6 +627,8 @@
 
   initLevels();
   initHome();
+  // The Game Night page links here with ?resume to pick up a saved game without pressing the button.
+  if (/[?&]resume\b/.test(location.search) && !$('resumeBtn').hidden) $('resumeBtn').click();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline install is optional */ });
   }

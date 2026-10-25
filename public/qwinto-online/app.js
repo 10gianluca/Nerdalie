@@ -14,6 +14,7 @@
     del: (k) => { try { localStorage.removeItem(k); } catch (_) { /* private mode */ } },
   };
   const SESSION_KEY = 'qwinto.session';
+  const hub = window.NerdalieHub ? window.NerdalieHub.game('qwinto-online', 'Qwinto Online') : null;
 
   const app = {
     role: null, // 'host' | 'guest'
@@ -272,6 +273,7 @@
     clearTimeout(botTimer);
     Object.assign(app, { solo: false, role: null, session: null, state: null, net: null, connected: false, guestLink: null, picked: null, busy: false });
     store.del(SESSION_KEY);
+    if (hub) hub.leave();
     if ($('overDialog').open) $('overDialog').close();
     history.replaceState(null, '', location.pathname);
     document.title = 'Qwinto Online';
@@ -388,12 +390,21 @@
 
     const needsMe = (s.phase === 'choose' && s.active === me) || (s.phase === 'rolled' && s.active === me) || (s.phase === 'enter' && !mine);
     document.title = needsMe ? '🎲 Your move · Qwinto' : 'Qwinto Online';
+    if (hub) hub.sync({ needsMe, over: s.phase === 'over', solo: app.solo, opponent: s.players[1 - me].name, level: app.session && app.session.level, code: app.session && app.session.code });
 
     if (s.phase === 'over' && !app.overShown) {
       app.overShown = true;
+      if (hub && app.session && !app.session.recorded && true) {
+        app.session.recorded = true;
+        store.set(SESSION_KEY, app.session);
+        const sc = s.players.map((p) => Q.score(p.sheet, p.fails));
+        const diff = sc[me].total - sc[1 - me].total;
+        hub.finish({ mode: app.solo ? 'solo' : 'online', level: app.solo ? app.session.level : '', opponent: app.solo ? 'Computer' : s.players[1 - me].name, outcome: diff > 0 ? 'win' : diff < 0 ? 'loss' : 'draw', detail: `${sc[me].total} vs ${sc[1 - me].total}` });
+      }
       setTimeout(openOver, 700);
     } else if (s.phase !== 'over') {
       app.overShown = false;
+      if (app.session) app.session.recorded = false;
       if ($('overDialog').open) $('overDialog').close();
     }
   }
@@ -624,6 +635,8 @@
 
   initLevels();
   initHome();
+  // The Game Night page links here with ?resume to pick up a saved game without pressing the button.
+  if (/[?&]resume\b/.test(location.search) && !$('resumeBtn').hidden) $('resumeBtn').click();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline install is optional */ });
   }

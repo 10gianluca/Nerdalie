@@ -1,0 +1,126 @@
+@font-face {
+  font-family: "heart";
+  src: url("Merisa-gxvMY.ttf") format("truetype");
+  font-display: swap;
+}
+
+/* ---------- theme: a Jaipur bazaar ---------- */
+:root {
+  --bg: #f1d9a6;
+  --surface: #fff7e6;
+  --ink: #3a1d12;
+  --muted: #86593c;
+  --line: #dcb878;
+  --accent: #a3224e;
+  --accent-dark: #751739;
+  --on-accent: #fff1e0;
+  --teal: #167a79;
+  --gold: #d9a21b;
+}
+body {
+  background:
+    radial-gradient(ellipse at 50% 0%, #f9e8be 0%, #f0d6a0 55%, #e2bd7c 100%) fixed;
+}
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.55;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cpath d='M28 4 L36 20 L52 28 L36 36 L28 52 L20 36 L4 28 L20 20z' fill='none' stroke='%23b8832f' stroke-width='1' opacity='.28'/%3E%3Ccircle cx='28' cy='28' r='3' fill='%23a3224e' opacity='.14'/%3E%3C/svg%3E");
+}
+.screen { z-index: 1; }
+.brand h1 { text-shadow: 2px 2px 0 rgb(217 162 27 / 0.45); }
+.brand h1::before { content: '🐪 '; font-size: 0.55em; vertical-align: 0.25em; text-shadow: none; }
+.panel, .rules { box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 4px var(--line), var(--shadow); }
+.area-head .name { font-family: "Palatino Linotype", Palatino, Georgia, serif; font-size: 1.05rem; }
+
+/* ---------- card colours ---------- */
+.t-diamond { --c: #c8323c; --c2: #8f1f2b; --on: #fff; }
+.t-gold { --c: #e6b422; --c2: #b78510; --on: #3b2a05; }
+.t-silver { --c: #b5bcc6; --c2: #7f8996; --on: #1f2733; }
+.t-cloth { --c: #3d78c6; --c2: #274f8c; --on: #fff; }
+.t-spice { --c: #3d9a52; --c2: #25683a; --on: #fff; }
+.t-leather { --c: #8c5a33; --c2: #5e3a1f; --on: #fff; }
+.t-camel { --c: #d9b373; --c2: #a8803c; --on: #3b2410; }
+
+.jcard {
+  appearance: none; border: 0; padding: 0; margin: 0; position: relative; width: 100%; min-width: 0; aspect-ratio: 3 / 4; overflow: hidden;
+  border-radius: 10px; color: var(--on);
+  background: linear-gradient(160deg, var(--c) 0%, var(--c2) 100%);
+  box-shadow: 0 0 0 2px var(--c2), var(--shadow);
+  display: grid; place-items: center; align-content: center; gap: 2px; text-align: center; cursor: default; font-weight: 800;
+  transition: transform 0.12s ease, box-shadow 0.12s;
+}
+.jcard::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(circle at 30% 18%, rgb(255 255 255 / 0.32), transparent 55%); box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.3);
+}
+.jcard .ico { position: relative; font-size: clamp(1.6rem, 9vw, 2.6rem); line-height: 1; filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.3)); }
+.jcard small { position: relative; font-size: clamp(0.5rem, 2.4vw, 0.66rem); font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.9; }
+.jcard.pickable { cursor: pointer; }
+.jcard.pickable:hover, .jcard.pickable:focus-visible { transform: translateY(-3px); }
+.jcard.sel { transform: translateY(-7px); box-shadow: 0 0 0 3px var(--ink), 0 10px 18px rgb(60 30 10 / 0.3); }
+.jcard.fresh { animation: pop 0.5s ease; }
+.jcard .n {
+  position: absolute; right: 4px; top: 4px; min-width: 1.5em; padding: 0 5px; border-radius: 999px; background: rgb(255 255 255 / 0.92); color: var(--ink);
+  font-size: 0.75rem; line-height: 1.5; font-variant-numeric: tabular-nums; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); z-index: 1;
+}
+.jcard .pick {
+  position: absolute; left: 4px; bottom: 4px; padding: 0 6px; border-radius: 999px; background: var(--ink); color: var(--surface);
+  font-size: 0.68rem; line-height: 1.6; font-weight: 800; z-index: 1;
+}
+.jcard.back { background: repeating-linear-gradient(45deg, #7a1738, #7a1738 6px, #8c2347 6px, #8c2347 12px); box-shadow: 0 0 0 2px #5c1029, var(--shadow); color: #ffe7c2; }
+.jcard.back .ico { font-size: 1.1rem; opacity: 0.7; }
+
+/* ---------- scoreboard ---------- */
+.scoreboard { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.scoreboard .who { display: grid; gap: 2px; text-align: center; flex: 1; min-width: 0; }
+.scoreboard .who span { font-size: 0.8rem; font-weight: 700; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scoreboard .who b { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.scoreboard .who small { font-size: 0.72rem; color: var(--muted); font-weight: 700; }
+.scoreboard .who.turn span::after { content: ' · playing'; color: var(--accent); }
+.scoreboard .mid { text-align: center; font-size: 0.75rem; color: var(--muted); font-weight: 700; line-height: 1.4; }
+.scoreboard .mid b { display: block; color: var(--ink); font-size: 0.95rem; }
+.seals { letter-spacing: 0.15em; font-size: 0.95rem; line-height: 1; min-height: 1em; }
+
+/* ---------- the other player ---------- */
+.oppRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.backs { display: flex; }
+.backs .jcard { width: 28px; aspect-ratio: 3 / 4; margin-left: -10px; border-radius: 6px; box-shadow: 0 0 0 1.5px #5c1029; }
+.backs .jcard:first-child { margin-left: 0; }
+.backs .jcard .ico { display: none; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pill { padding: 3px 10px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line); font-size: 0.8rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- the market ---------- */
+.market { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; padding-top: 6px; }
+
+/* ---------- token piles ---------- */
+.pileGrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.tpile { display: grid; justify-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
+.coin {
+  width: 100%; max-width: 46px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.05rem; color: var(--on);
+  background: radial-gradient(circle at 32% 28%, rgb(255 255 255 / 0.5), transparent 45%), linear-gradient(160deg, var(--c), var(--c2));
+  box-shadow: 0 0 0 2px var(--c2), 0 2px 4px rgb(0 0 0 / 0.25);
+}
+.coin.none { background: none; box-shadow: inset 0 0 0 2px var(--line); color: var(--muted); font-size: 0.8rem; }
+.tpile small { font-size: 0.66rem; font-weight: 700; color: var(--muted); }
+.tpile .gl { font-size: 0.95rem; line-height: 1; }
+.bonusLine { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 0.75rem; font-weight: 700; color: var(--muted); }
+.bonusLine span { padding: 2px 9px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line); }
+.endWarn { text-align: center; margin-top: 8px; font-size: 0.78rem; font-weight: 800; color: var(--accent); }
+
+/* ---------- my hand ---------- */
+.hand { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; padding-top: 8px; }
+.hand .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: 0.85rem; }
+.myTokens { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 12px; min-height: 0; }
+.myTokens:empty { display: none; }
+.mt { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px 2px 3px; border-radius: 999px; background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--line); font-size: 0.78rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mt i { font-style: normal; width: 1.5em; height: 1.5em; display: grid; place-items: center; border-radius: 50%; background: var(--c); color: var(--on); font-size: 0.8rem; }
+
+/* ---------- action bar & results ---------- */
+.actions .go { display: inline-flex; align-items: center; gap: 6px; }
+.result tr.win td { color: var(--good); }
+@media (max-width: 420px) {
+  .market { gap: 5px; }
+  .pileGrid { gap: 4px; }
+  .hand { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+}

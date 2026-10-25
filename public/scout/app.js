@@ -14,6 +14,7 @@
     del: (k) => { try { localStorage.removeItem(k); } catch (_) { /* private mode */ } },
   };
   const SESSION_KEY = 'scout.session';
+  const hub = window.NerdalieHub ? window.NerdalieHub.game('scout', 'Scout') : null;
 
   const app = {
     role: null, // 'host' | 'guest'
@@ -271,6 +272,7 @@
     clearTimeout(botTimer);
     Object.assign(app, { solo: false, role: null, session: null, state: null, net: null, connected: false, guestLink: null, sel: null, scout: null, preFlip: false, busy: false, overKey: null });
     store.del(SESSION_KEY);
+    if (hub) hub.leave();
     if ($('overDialog').open) $('overDialog').close();
     history.replaceState(null, '', location.pathname);
     document.title = 'Scout Online';
@@ -488,13 +490,21 @@
 
     const needsMe = (s.phase === 'orient' && !s.players[me].ready) || (s.phase === 'play' && s.active === me);
     document.title = needsMe ? '🎪 Your move · Scout' : 'Scout Online';
+    if (hub) hub.sync({ needsMe, over: s.phase === 'over', solo: app.solo, opponent: s.players[1 - me].name, level: app.session && app.session.level, code: app.session && app.session.code });
 
     const key = s.phase === 'roundover' || s.phase === 'over' ? `${s.round}-${s.phase}` : null;
     if (key && key !== app.overKey) {
       app.overKey = key;
+      if (hub && app.session && !app.session.recorded && s.phase === 'over') {
+        app.session.recorded = true;
+        store.set(SESSION_KEY, app.session);
+        const w = s.end.winner;
+        hub.finish({ mode: app.solo ? 'solo' : 'online', level: app.solo ? app.session.level : '', opponent: app.solo ? 'Computer' : s.players[1 - me].name, outcome: w === me ? 'win' : w === null ? 'draw' : 'loss', detail: `${s.totals[me]} vs ${s.totals[1 - me]}` });
+      }
       setTimeout(openOver, 900);
     } else if (!key) {
       app.overKey = null;
+      if (app.session) app.session.recorded = false;
       if ($('overDialog').open) $('overDialog').close();
     }
   }
@@ -675,6 +685,8 @@
 
   initLevels();
   initHome();
+  // The Game Night page links here with ?resume to pick up a saved game without pressing the button.
+  if (/[?&]resume\b/.test(location.search) && !$('resumeBtn').hidden) $('resumeBtn').click();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline install is optional */ });
   }

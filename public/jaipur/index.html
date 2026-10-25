@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Jaipur Online</title>
+  <meta name="description" content="Play the Jaipur trading card game online with a friend.">
+  <meta name="theme-color" content="#f3d79c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="../shared/hub.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
+  <script src="game.js" defer></script>
+  <script src="bot.js" defer></script>
+  <script src="net.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main id="home" class="screen">
+    <a class="back" href="../">&larr; Back to the site</a>
+    <div class="brand">
+      <h1>Jaipur</h1>
+      <p>Trade spices, silver and camels, online with a friend</p>
+    </div>
+    <div class="stack">
+      <label class="field"><span>Your name</span>
+        <input id="nameInput" class="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
+      </label>
+      <button id="createBtn" class="btn primary big">Create a game</button>
+      <div class="divider">or join a friend's game</div>
+      <form id="joinForm" class="join">
+        <input id="codeInput" class="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+        <button class="btn primary" type="submit">Join</button>
+      </form>
+      <div class="divider">or play on your own against the computer</div>
+      <div class="solo">
+        <div class="levels" role="group" aria-label="Difficulty">
+          <button type="button" class="lvl" data-level="easy">Easy</button>
+          <button type="button" class="lvl" data-level="normal">Normal</button>
+          <button type="button" class="lvl" data-level="hard">Hard</button>
+        </div>
+        <button id="soloBtn" class="btn big" type="button">Play solo</button>
+      </div>
+      <button id="resumeBtn" class="btn" hidden></button>
+    </div>
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>On your turn do <b>one</b> of these: <b>take</b> one goods card from the market, <b>take all the camels</b>, <b>swap</b> cards with the market, or <b>sell</b> goods.</li>
+        <li>Your hand holds at most <b>7</b> cards. Camels go in your herd and don't count.</li>
+        <li><b>Swap</b> two or more: give goods from your hand and/or camels, take the same number of goods from the market. You can't take camels, or take a kind you are giving.</li>
+        <li><b>Sell</b> cards of one kind. Each card earns a token, highest first. Diamonds, gold and silver must go <b>two or more</b> at a time. Selling <b>3, 4 or 5+</b> also earns a face-down bonus token.</li>
+        <li>The round ends when <b>three kinds of tokens run out</b>, or the market can't be refilled. The bigger herd gets <b>5 points</b>.</li>
+        <li>Win a round for a <b>seal of excellence</b>. Two seals win the match.</li>
+      </ul>
+    </details>
+  </main>
+
+  <main id="lobby" class="screen lobby" hidden>
+    <p class="eyebrow">Room code</p>
+    <div id="lobbyCode" class="code"></div>
+    <p id="lobbyMsg"></p>
+    <div class="row">
+      <button id="shareBtn" class="btn primary">Share invite</button>
+      <button id="copyBtn" class="btn">Copy link</button>
+    </div>
+    <button id="cancelBtn" class="btn ghost">Cancel</button>
+  </main>
+
+  <main id="game" class="screen" hidden>
+    <header class="topbar">
+      <div class="room"><span id="netDot" class="dot"></span><span id="roomLabel">Room</span> <b id="roomCode"></b></div>
+      <button id="leaveBtn" class="btn ghost">Leave</button>
+    </header>
+    <div id="netBanner" class="banner" hidden></div>
+
+    <section class="panel">
+      <div id="scoreboard" class="scoreboard"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span id="oppName" class="name"></span><span id="oppHint" class="hint"></span></div>
+      <div id="oppRow" class="oppRow"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Market</span><span id="marketHint" class="hint"></span></div>
+      <div id="market" class="market"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Tokens</span><span id="tokenHint" class="hint"></span></div>
+      <div id="piles" class="piles"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span id="myName" class="name"></span><span id="myHint" class="hint"></span></div>
+      <div id="hand" class="hand"></div>
+      <div id="myTokens" class="myTokens"></div>
+    </section>
+
+    <p id="lastTurn" class="last"></p>
+
+    <div id="bar" class="bar" aria-live="polite">
+      <p id="status" class="status"></p>
+      <p id="sub" class="sub"></p>
+      <div id="actions" class="actions"></div>
+    </div>
+  </main>
+
+  <dialog id="overDialog">
+    <div class="result">
+      <h2 id="overTitle"></h2>
+      <p id="overWhy" class="why"></p>
+      <table id="overTable"></table>
+      <div class="row">
+        <button id="rematchBtn" class="btn primary">Next round</button>
+        <button id="closeOverBtn" class="btn">View table</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

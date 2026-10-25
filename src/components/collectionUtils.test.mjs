@@ -61,7 +61,7 @@ test('saveDecisionViaScript sends the game and choice, and accepts only a confir
     return { ok: true, status: 200, json: async () => ({ ok: true, kind: 'decision' }) };
   };
   assert.equal(await saveDecisionViaScript('https://example.test/exec', 'Catan', 'Keep'), true);
-  assert.deepEqual(sent[0].body, { decision: { game: 'Catan', choice: 'Keep' } });
+  assert.deepEqual(sent[0].body, { decision: { game: 'Catan', choice: 'Keep', tab: 'Decisions' } });
   assert.match(sent[0].type, /text\/plain/);
 
   // an old script has no decision branch: it replies with an HTML error page, so json() throws

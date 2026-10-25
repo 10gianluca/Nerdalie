@@ -26,8 +26,8 @@ async function bggFetch(url) {
 // than making the browser retry through several round trips of its own. Netlify stops a function after
 // 10 seconds, so this gives up a little before that (the page then says to try again, and BGG has
 // usually finished by then) instead of being cut off mid-wait with an unhelpful gateway error.
-async function fetchCollection(username) {
-  const url = `${BASE}/collection?username=${encodeURIComponent(username)}&own=1&stats=1`;
+async function fetchCollection(username, filter = 'own=1') {
+  const url = `${BASE}/collection?username=${encodeURIComponent(username)}&${filter}&stats=1`;
   let res;
   for (let i = 0; i < 4; i++) {
     res = await bggFetch(url);
@@ -49,6 +49,8 @@ exports.handler = async (event) => {
       res = await bggFetch(`${BASE}/thing?id=${encodeURIComponent(ids)}&stats=1`);
     } else if (mode === 'collection' && username) {
       res = await fetchCollection(username);
+    } else if (mode === 'wishlist' && username) {
+      res = await fetchCollection(username, 'wishlist=1');
     } else {
       return { statusCode: 400, headers: CORS, body: 'Missing or unrecognised "mode" parameter' };
     }

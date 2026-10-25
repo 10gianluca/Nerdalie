@@ -319,8 +319,15 @@ export async function bggFindCandidates(query, limit = 6) {
 
 // Everything in a BGG collection marked "own", with the same stats shape as bggThing()'s results,
 // read straight from the collection endpoint's own <stats> block (one call, not one per game).
-export async function bggOwnedCollection(username) {
-  const xml = await callFn('bgg', { mode: 'collection', username });
+export const bggOwnedCollection = (username) => bggCollectionList('collection', username);
+
+// The games on a BGG wishlist, each with BGG's own 1 to 5 priority (1 = must have) in `priority`.
+export const bggWishlist = (username) => bggCollectionList('wishlist', username);
+
+export const PRIORITY_LABELS = { 1: 'Must have', 2: 'Love to have', 3: 'Like to have', 4: 'Thinking about it', 5: "Don't buy this" };
+
+async function bggCollectionList(mode, username) {
+  const xml = await callFn('bgg', { mode, username });
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const errorText = doc.querySelector('errors message, error message')?.textContent;
   if (errorText) throw new Error(errorText);
@@ -342,6 +349,7 @@ export async function bggOwnedCollection(username) {
       image: it.querySelector('image')?.textContent || it.querySelector('thumbnail')?.textContent || '',
       rating: avgRaw && avgRaw !== 'N/A' ? Number.parseFloat(avgRaw).toFixed(1) : '',
       type: '', // the collection endpoint doesn't carry the solo/co-op/team links; left for a person to fill in
+      priority: it.querySelector('status')?.getAttribute('wishlistpriority') || '',
     };
   });
 }
@@ -462,14 +470,15 @@ export function shuffled(list, rng = Math.random) {
 export const undecidedGames = (owned, decisions, rng = Math.random) =>
   shuffled(owned.filter((g) => !decisions.has(matchKey(g.name))), rng);
 
-// Saves one answer through the same Apps Script Web App. The script must reply { ok: true, kind: 'decision' }:
-// an older copy of the script (without the decision branch) doesn't, and that is reported instead of
-// silently looking like it worked.
-export async function saveDecisionViaScript(scriptUrl, game, choice) {
+const OUTDATED_SCRIPT = 'Your sheet script did not confirm saving. Open Settings, copy the latest script from the setup help into Apps Script, and redeploy it as a new version.';
+
+// POSTs one request to the sheet's Apps Script and returns its JSON reply (null if it wasn't JSON, which is what
+// an older copy of the script gives for a request it doesn't know about).
+async function postToScript(scriptUrl, body) {
   const res = await fetch(scriptUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ decision: { game, choice } }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`The script replied with ${res.status}`);
   let data = null;
@@ -479,9 +488,99 @@ export async function saveDecisionViaScript(scriptUrl, game, choice) {
     // an old script answers with an HTML error page, which isn't JSON
   }
   if (data && data.ok === false) throw new Error(data.error || 'The script reported an error');
-  if (!data || data.kind !== 'decision') {
-    throw new Error('Your sheet script did not confirm saving. Open Settings, copy the latest script from the setup help into Apps Script, and redeploy it as a new version.');
+  return data;
+}
+
+// A script from before the Wishlist tab existed would take a wishlist answer and quietly file it in Decisions. So
+// before the first save to any other tab, this asks the script to say which version it is (a harmless request that an
+// older script rejects without writing anything), and remembers the answer for each script address.
+const verifiedScripts = new Set();
+async function requireCurrentScript(scriptUrl) {
+  if (verifiedScripts.has(scriptUrl)) return;
+  let data = null;
+  try {
+    data = await postToScript(scriptUrl, { ping: true });
+  } catch (_) {
+    // an older script fails on a request it doesn't know, which is the same answer as not being current
   }
+  if (!data || data.kind !== 'ping') throw new Error(OUTDATED_SCRIPT);
+  verifiedScripts.add(scriptUrl);
+}
+
+// Saves one answer in the named tab through the same Apps Script Web App. The script must reply
+// { ok: true, kind: 'decision' }; an older copy of the script (without the decision branch) doesn't, and that is
+// reported instead of silently looking like it worked. Tabs other than the first one, Decisions, are only written
+// by a script that has been checked to be current, and have to be echoed back as well.
+export async function saveDecisionViaScript(scriptUrl, game, choice, tab = DECISIONS_TAB) {
+  if (tab !== DECISIONS_TAB) await requireCurrentScript(scriptUrl);
+  const data = await postToScript(scriptUrl, { decision: { game, choice, tab } });
+  if (!data || data.kind !== 'decision' || (tab !== DECISIONS_TAB && data.tab !== tab)) throw new Error(OUTDATED_SCRIPT);
+  return true;
+}
+
+// ---------- BGG wishlist ----------
+// Each wishlist game gets answered once (Buy / Drop / Later) in a second tab of the sheet called Wishlist.
+
+export const WISHLIST_TAB = 'Wishlist';
+export const WISHLIST_CHOICES = ['Buy', 'Drop', 'Later'];
+
+// Wishlist games that have no answer yet: BGG's must-haves first, random within each priority.
+export function wishlistQueue(wishlist, answered, rng = Math.random) {
+  const rank = (g) => (Number(g.priority) >= 1 && Number(g.priority) <= 5 ? Number(g.priority) : 6);
+  return shuffled(wishlist.filter((g) => !answered.has(matchKey(g.name))), rng)
+    .map((g, i) => ({ g, i }))
+    .sort((a, b) => rank(a.g) - rank(b.g) || a.i - b.i)
+    .map((x) => x.g);
+}
+
+// ---------- plays ----------
+// A third tab, Plays, is the log of games you've actually played: Date, Game, Players, Winner, Notes.
+
+export const PLAYS_TAB = 'Plays';
+const DAY_MS = 86400000;
+
+// The Plays tab as a list, in sheet order. If the tab doesn't exist yet Google answers with the first sheet instead,
+// so anything whose header doesn't start Date, Game counts as empty.
+export function parsePlays(text) {
+  const table = parseCsv(text || '');
+  if (!table.length) return [];
+  const head = table[0].map(normalizeHeader);
+  if (head[0] !== 'date' || head[1] !== 'game') return [];
+  return table.slice(1)
+    .map((r) => ({ date: (r[0] || '').trim(), game: (r[1] || '').trim(), players: (r[2] || '').trim(), winner: (r[3] || '').trim(), notes: (r[4] || '').trim() }))
+    .filter((p) => p.game);
+}
+
+const dateToTime = (d) => {
+  const t = Date.parse(d);
+  return Number.isFinite(t) ? t : null;
+};
+
+// Per game (keyed by matchKey): how many plays it has, and when the latest one was (lastTs is null when no play had
+// a date that could be read).
+export function playStats(plays) {
+  const stats = new Map();
+  for (const p of plays) {
+    const key = matchKey(p.game);
+    if (!key) continue;
+    const s = stats.get(key) || { count: 0, last: '', lastTs: null };
+    s.count += 1;
+    const ts = dateToTime(p.date);
+    if (ts != null && (s.lastTs == null || ts > s.lastTs)) {
+      s.lastTs = ts;
+      s.last = p.date;
+    }
+    stats.set(key, s);
+  }
+  return stats;
+}
+
+// Whole days between a play and now (never negative), or null when the date isn't readable.
+export const daysSince = (ts, now = Date.now()) => (ts == null ? null : Math.max(0, Math.floor((now - ts) / DAY_MS)));
+
+export async function savePlayViaScript(scriptUrl, play) {
+  const data = await postToScript(scriptUrl, { play });
+  if (!data || data.kind !== 'play') throw new Error(OUTDATED_SCRIPT);
   return true;
 }
 
@@ -532,11 +631,20 @@ const toNumber = (v) => {
 //   maxTime  - at most this many minutes (a game with no time listed still counts)
 //   type     - one mode, e.g. "co-op"; a game with no type listed doesn't count
 //   themes   - any of these BGG categories; a game with no BGG info doesn't count
+//   history  - 'never': no play logged yet; 'stale': never played, or not for `staleDays` (a play with no readable
+//              date counts as recent). `stats` is playStats() of the Plays tab.
+//   exclude  - a Set of matchKey()s to leave out (the games you marked Discard)
 // `themeMap` is { bggId: [categories] }.
-export function pickableGames(games, themeMap = {}, { players = null, maxTime = null, type = '', themes = [] } = {}) {
+export function pickableGames(games, themeMap = {}, { players = null, maxTime = null, type = '', themes = [], history = '', stats = null, staleDays = 30, exclude = null, now = Date.now() } = {}) {
   const wantedType = type.trim().toLowerCase();
   const wantedThemes = new Set(themes);
   return games.filter((g) => {
+    if (exclude && exclude.has(matchKey(g.name))) return false;
+    if (history) {
+      const s = stats && stats.get(matchKey(g.name));
+      if (history === 'never' && s) return false;
+      if (history === 'stale' && s && (s.lastTs == null || daysSince(s.lastTs, now) < staleDays)) return false;
+    }
     if (players != null) {
       const min = toNumber(g.minPlayers) ?? 1;
       const max = toNumber(g.maxPlayers) ?? Infinity;

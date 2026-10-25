@@ -1,0 +1,48 @@
+/* Buttons added to the Board page after Home.css was written. They look like the others (the same size, colour and
+   shadow); the class names are only used on this page. */
+.nightButton,
+.jaipurButton,
+.onitamaButton,
+.schottenButton,
+.santoriniButton,
+.reversiButton,
+.mancalaButton,
+.quartoButton,
+.checkersButton {
+  display: inline-block;
+  position: relative;
+  padding: 10px 24px;
+  font-size: 20px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  outline: none;
+  color: rgb(250, 245, 221);
+  background-color: #a83f39;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 9px #ff0000;
+  width: auto;
+  min-width: 150px;
+  height: 50px;
+  white-space: nowrap;
+}
+
+/* a small count on GAME NIGHT when it's your move in some games */
+.nightBadge {
+  position: absolute;
+  top: -12px;
+  right: -10px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  border-radius: 13px;
+  font-size: 15px;
+  line-height: 1;
+  color: #3a2a05;
+  background: #f3c969;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}

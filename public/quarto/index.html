@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Quarto Online</title>
+  <meta name="description" content="Play Quarto online with a friend: give your opponent the piece they must place.">
+  <meta name="theme-color" content="#7a4a21">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="../shared/base.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="../shared/hub.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
+  <script src="../shared/net.js" defer></script>
+  <script src="../shared/shell.js" defer></script>
+  <script src="game.js" defer></script>
+  <script src="bot.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main id="home" class="screen">
+    <a class="back" href="../">&larr; Back to the site</a>
+    <div class="brand">
+      <h1>Quarto</h1>
+      <p>Hand your opponent the piece, and hope it is the wrong one</p>
+    </div>
+    <div class="stack">
+      <label class="field"><span>Your name</span>
+        <input id="nameInput" class="text" maxlength="16" autocomplete="nickname" placeholder="e.g. Sam">
+      </label>
+      <button id="createBtn" class="btn primary big">Create a game</button>
+      <div class="divider">or join a friend's game</div>
+      <form id="joinForm" class="join">
+        <input id="codeInput" class="text" maxlength="6" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+        <button class="btn primary" type="submit">Join</button>
+      </form>
+      <div class="divider">or play on your own against the computer</div>
+      <div class="solo">
+        <div class="levels" role="group" aria-label="Difficulty">
+          <button type="button" class="lvl" data-level="easy">Easy</button>
+          <button type="button" class="lvl" data-level="normal">Normal</button>
+          <button type="button" class="lvl" data-level="hard">Hard</button>
+        </div>
+        <button id="soloBtn" class="btn big" type="button">Play solo</button>
+      </div>
+      <button id="resumeBtn" class="btn" hidden></button>
+    </div>
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>There are <b>16 pieces</b>, each <b>tall or short</b>, <b>dark or light</b>, <b>round or square</b>, <b>hollow or solid</b>.</li>
+        <li>On your turn you <b>place the piece you were given</b> on any empty square, then <b>choose a piece for your opponent</b> to place next.</li>
+        <li>Make a line of <b>four</b> (across, down or diagonal) that share <b>at least one feature</b> and you win, for example four dark pieces, or four hollow ones.</li>
+        <li>So never hand over a piece that finishes a line. If the board fills up with no line, it is a <b>draw</b>.</li>
+      </ul>
+    </details>
+  </main>
+
+  <main id="lobby" class="screen lobby" hidden>
+    <p class="eyebrow">Room code</p>
+    <div id="lobbyCode" class="code"></div>
+    <p id="lobbyMsg"></p>
+    <div class="row">
+      <button id="shareBtn" class="btn primary">Share invite</button>
+      <button id="copyBtn" class="btn">Copy link</button>
+    </div>
+    <button id="cancelBtn" class="btn ghost">Cancel</button>
+  </main>
+
+  <main id="game" class="screen" hidden>
+    <header class="topbar">
+      <div class="room"><span id="netDot" class="dot"></span><span id="roomLabel">Room</span> <b id="roomCode"></b></div>
+      <button id="leaveBtn" class="btn ghost">Leave</button>
+    </header>
+    <div id="netBanner" class="banner" hidden></div>
+
+    <section class="panel">
+      <div id="scoreboard" class="scoreboard"></div>
+    </section>
+
+    <section class="panel handPanel">
+      <div class="area-head"><span id="handTitle" class="name">Piece to place</span><span id="handHint" class="hint"></span></div>
+      <div id="handBox" class="handBox"></div>
+    </section>
+
+    <section class="boardWrap">
+      <div id="board" class="board" role="grid" aria-label="Quarto board"></div>
+    </section>
+
+    <section class="panel">
+      <div class="area-head"><span class="name">Pieces left</span><span id="poolHint" class="hint"></span></div>
+      <div id="pool" class="pool"></div>
+    </section>
+    <p id="legend" class="legend"></p>
+
+    <p id="lastTurn" class="last"></p>
+
+    <div id="bar" class="bar" aria-live="polite">
+      <p id="status" class="status"></p>
+      <p id="sub" class="sub"></p>
+      <div id="actions" class="actions"></div>
+    </div>
+  </main>
+
+  <dialog id="overDialog">
+    <div class="result">
+      <h2 id="overTitle"></h2>
+      <p id="overWhy" class="why"></p>
+      <table id="overTable"></table>
+      <div class="row">
+        <button id="rematchBtn" class="btn primary">Play again</button>
+        <button id="closeOverBtn" class="btn">View board</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

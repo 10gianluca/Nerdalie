@@ -14,6 +14,7 @@
     del: (k) => { try { localStorage.removeItem(k); } catch (_) { /* private mode */ } },
   };
   const SESSION_KEY = 'agentavenue.session';
+  const hub = window.NerdalieHub ? window.NerdalieHub.game('agent-avenue', 'Agent Avenue') : null;
 
   const app = {
     role: null, // 'host' | 'guest'
@@ -269,6 +270,7 @@
     clearTimeout(botTimer);
     Object.assign(app, { solo: false, role: null, session: null, state: null, net: null, connected: false, guestLink: null, sel: [], busy: false });
     store.del(SESSION_KEY);
+    if (hub) hub.leave();
     if ($('overDialog').open) $('overDialog').close();
     history.replaceState(null, '', location.pathname);
     document.title = 'Agent Avenue Online';
@@ -495,12 +497,19 @@
 
     const needsMe = (s.phase === 'offer' && s.active === me) || (s.phase === 'choose' && s.active !== me);
     document.title = needsMe ? '🕵️ Your move · Agent Avenue' : 'Agent Avenue Online';
+    if (hub) hub.sync({ needsMe, over: s.phase === 'over', solo: app.solo, opponent: s.players[1 - me].name, level: app.session && app.session.level, code: app.session && app.session.code });
 
     if (s.phase === 'over' && !app.overShown) {
       app.overShown = true;
+      if (hub && app.session && !app.session.recorded && true) {
+        app.session.recorded = true;
+        store.set(SESSION_KEY, app.session);
+        hub.finish({ mode: app.solo ? 'solo' : 'online', level: app.solo ? app.session.level : '', opponent: app.solo ? 'Computer' : s.players[1 - me].name, outcome: s.end.winner === me ? 'win' : 'loss', detail: ({ catch: 'caught', 'win-set': '3 Codebreakers', 'lose-set': '3 Daredevils', deck: 'deck ran out' })[s.end.reason] || '' });
+      }
       setTimeout(openOver, 900);
     } else if (s.phase !== 'over') {
       app.overShown = false;
+      if (app.session) app.session.recorded = false;
       if ($('overDialog').open) $('overDialog').close();
     }
   }
@@ -634,6 +643,8 @@
   buildTrack();
   initLevels();
   initHome();
+  // The Game Night page links here with ?resume to pick up a saved game without pressing the button.
+  if (/[?&]resume\b/.test(location.search) && !$('resumeBtn').hidden) $('resumeBtn').click();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline install is optional */ });
   }

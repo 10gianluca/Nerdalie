@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Game Night</title>
+  <meta name="description" content="Games in progress, the scoreboard and move alerts for the online games.">
+  <meta name="theme-color" content="#1b1730">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b1730'/%3E%3Ctext x='32' y='44' font-size='34' text-anchor='middle'%3E%F0%9F%8E%B2%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="../shared/hub.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="wrap">
+    <a class="back" href="../Board">&larr; Back to the games</a>
+    <header class="head">
+      <h1>Game night</h1>
+      <p>Games you have going, who's ahead, and a nudge when it's your move.</p>
+    </header>
+
+    <section class="card" id="nowCard" aria-labelledby="nowTitle">
+      <h2 id="nowTitle">In progress</h2>
+      <div id="now"></div>
+    </section>
+
+    <section class="card" aria-labelledby="scoreTitle">
+      <div class="cardHead">
+        <h2 id="scoreTitle">Scoreboard</h2>
+        <span class="note" id="scoreNote"></span>
+      </div>
+      <div id="score"></div>
+    </section>
+
+    <section class="card" aria-labelledby="recentTitle">
+      <h2 id="recentTitle">Recent games</h2>
+      <div id="recent"></div>
+    </section>
+
+    <section class="card" aria-labelledby="alertTitle">
+      <h2 id="alertTitle">Tell me when it's my move</h2>
+      <p class="note">These work while a game is open in a background tab. They don't fire for games against the computer.</p>
+      <div class="prefs">
+        <label><input type="checkbox" id="prefSound"> Play a short sound</label>
+        <label><input type="checkbox" id="prefTitle"> Flash the tab title</label>
+        <label><input type="checkbox" id="prefNotify"> Show a desktop notification</label>
+      </div>
+      <p class="note" id="notifyNote"></p>
+    </section>
+
+    <section class="card" aria-labelledby="playTitle">
+      <h2 id="playTitle">Start something</h2>
+      <div class="games" id="games"></div>
+    </section>
+
+    <footer class="foot">
+      <span>Results and games in progress are kept in this browser only.</span>
+      <button class="link" id="clearBtn" type="button">Clear the scoreboard</button>
+    </footer>
+  </main>
+</body>
+</html>

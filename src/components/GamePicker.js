@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { sheetGames, typeChoices, pickableGames, themeCounts, shuffled, bggThemes, bggGameUrl, TIME_STEPS } from './collectionUtils';
+import { sheetGames, typeChoices, pickableGames, themeCounts, shuffled, bggThemes, bggGameUrl, matchKey, daysSince, TIME_STEPS } from './collectionUtils';
 
 /* The "Pick a game" tab: say how many players, how long, what kind of game and (from BoardGameGeek's
    categories) what theme, and it deals your matching games one at a time in random order. Skip moves on
@@ -26,6 +26,14 @@ const saveThemeCache = (map) => {
   }
 };
 
+// "Played 3 times, last 12 days ago" / "Never played"
+function playedText(s) {
+  if (!s) return 'Never played';
+  const days = daysSince(s.lastTs);
+  const last = days == null ? '' : days === 0 ? ', last today' : days === 1 ? ', last yesterday' : `, last ${days} days ago`;
+  return `Played ${s.count} time${s.count === 1 ? '' : 's'}${last}`;
+}
+
 const timeLabel = (m) => (m < 60 ? `${m} min` : m === 60 ? '1 hr' : `${m / 60} hr`);
 const capitalise = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -46,7 +54,8 @@ function PickRow({ label, children }) {
   );
 }
 
-function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry }) {
+// stats: playStats() of the Plays tab (null until read). discards: matchKey()s of games marked Discard.
+function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry, stats, discards, extras }) {
   const games = useMemo(() => sheetGames(rows, idx), [rows, idx]);
   const types = useMemo(() => typeChoices(rows, idx), [rows, idx]);
   const ids = useMemo(() => [...new Set(games.map((g) => g.id).filter(Boolean))], [games]);
@@ -55,6 +64,8 @@ function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry }) {
   const [players, setPlayers] = useState(null); // a number, or null for any
   const [maxTime, setMaxTime] = useState(null); // minutes, or null for any
   const [type, setType] = useState('');
+  const [history, setHistory] = useState(''); // '' | 'never' | 'stale' (see pickableGames)
+  const [hideDiscards, setHideDiscards] = useState(true);
   const [chosen, setChosen] = useState([]); // BGG categories; a game needs at least one of them
   const [showAllThemes, setShowAllThemes] = useState(false);
   const [deck, setDeck] = useState(null); // { list, pos } once "Pick a game" is pressed; pos === list.length means all skipped
@@ -94,9 +105,13 @@ function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry }) {
   }, [idsKey]);
 
   // Changing what you're after throws away the current deal.
-  useEffect(() => { setDeck(null); }, [players, maxTime, type, chosen]);
+  useEffect(() => { setDeck(null); }, [players, maxTime, type, chosen, history, hideDiscards]);
 
-  const base = useMemo(() => pickableGames(games, themes, { players, maxTime, type }), [games, themes, players, maxTime, type]);
+  const exclude = hideDiscards && discards && discards.size ? discards : null;
+  const base = useMemo(
+    () => pickableGames(games, themes, { players, maxTime, type, history, stats, exclude }),
+    [games, themes, players, maxTime, type, history, stats, exclude],
+  );
   const matches = useMemo(() => (chosen.length ? pickableGames(base, themes, { themes: chosen }) : base), [base, themes, chosen]);
 
   // Theme chips show how many of the games that fit the other choices have each theme.
@@ -107,13 +122,13 @@ function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry }) {
   }, [base, themes, chosen]);
   const shownThemes = showAllThemes ? themeList : themeList.filter((t, i) => i < THEMES_SHOWN || chosen.includes(t.name));
 
-  const anyFilter = players != null || maxTime != null || type || chosen.length;
+  const anyFilter = players != null || maxTime != null || type || chosen.length || history;
   const current = deck && deck.list[deck.pos];
   const deckList = deck ? deck.list : null;
 
   const toggle = (value, now, set) => set(now === value ? null : value);
   const toggleTheme = (name) => setChosen((c) => (c.includes(name) ? c.filter((x) => x !== name) : [...c, name]));
-  const clearFilters = () => { setPlayers(null); setMaxTime(null); setType(''); setChosen([]); };
+  const clearFilters = () => { setPlayers(null); setMaxTime(null); setType(''); setChosen([]); setHistory(''); };
   const pick = () => setDeck({ list: shuffled(matches), pos: 0 });
   const skip = () => setDeck((d) => (d && d.pos < d.list.length ? { ...d, pos: d.pos + 1 } : d));
 
@@ -179,6 +194,19 @@ function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry }) {
           </PickRow>
         )}
 
+        {stats && (
+          <PickRow label="History">
+            <Pill on={!history} onClick={() => setHistory('')}>Any</Pill>
+            <Pill on={history === 'never'} onClick={() => setHistory(history === 'never' ? '' : 'never')}>Never played</Pill>
+            <Pill on={history === 'stale'} onClick={() => setHistory(history === 'stale' ? '' : 'stale')}>Not in 30+ days</Pill>
+            {discards && discards.size > 0 && (
+              <Pill on={hideDiscards} onClick={() => setHideDiscards((h) => !h)}>Hide ones I discarded</Pill>
+            )}
+          </PickRow>
+        )}
+        {extras && extras.status === 'loading' && <p className="gcHint gcThemeStatus">Reading your plays and decisions…</p>}
+        {extras && extras.status === 'error' && <p className="gcHint gcThemeStatus">Couldn't read your plays and decisions ({extras.error}), so the history filters are off. <button className="gcLinkBtn gcSmall" onClick={extras.retry}>Retry</button></p>}
+
         {ids.length > 0 ? (
           <PickRow label="Theme">
             <Pill on={!chosen.length} onClick={() => setChosen([])}>Any</Pill>
@@ -231,6 +259,7 @@ function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry }) {
                   {current.type && <span className="gcFact">{current.type}</span>}
                   {current.rating && <span className="gcFact">★ {current.rating}</span>}
                 </div>
+                {stats && <p className="gcLast">{playedText(stats.get(matchKey(current.name)))}</p>}
                 {currentThemes.length > 0 && (
                   <div className="gcTags">{currentThemes.map((t) => <span key={t} className="gcTag">{t}</span>)}</div>
                 )}

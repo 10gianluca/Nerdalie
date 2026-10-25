@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1d2238"/>
+  <circle cx="256" cy="226" r="150" fill="#c2362b"/>
+  <circle cx="256" cy="226" r="150" fill="none" stroke="#f4d27a" stroke-width="8"/>
+  <!-- a torii gate -->
+  <rect x="96" y="196" width="320" height="26" rx="10" fill="#1d2238"/>
+  <rect x="124" y="148" width="264" height="30" rx="12" fill="#1d2238"/>
+  <rect x="150" y="196" width="26" height="170" fill="#1d2238"/>
+  <rect x="336" y="196" width="26" height="170" fill="#1d2238"/>
+  <rect x="190" y="236" width="132" height="18" fill="#1d2238"/>
+  <!-- a pawn and a master on the board below -->
+  <circle cx="176" cy="430" r="30" fill="#c2362b" stroke="#f4d27a" stroke-width="6"/>
+  <circle cx="256" cy="430" r="30" fill="#2e4f94" stroke="#f6ecd5" stroke-width="6"/>
+  <circle cx="336" cy="430" r="30" fill="#c2362b" stroke="#f6ecd5" stroke-width="6"/>
+</svg>

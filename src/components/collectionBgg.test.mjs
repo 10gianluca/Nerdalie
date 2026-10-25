@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { bggOwnedCollection, bggThing, bggThemes } from './collectionUtils.js';
+import { bggOwnedCollection, bggWishlist, bggThing, bggThemes } from './collectionUtils.js';
 
 global.DOMParser = new JSDOM('').window.DOMParser;
 
@@ -65,10 +65,24 @@ test('bggOwnedCollection reads a collection export laid out like the real one', 
   stubFetch(() => ({ body: COLLECTION }));
   const owned = await bggOwnedCollection('tester');
   assert.equal(owned.length, 2);
-  assert.deepEqual({ ...owned[0] }, { id: '13', name: 'CATAN', year: '1995', minPlayers: '3', maxPlayers: '4', playTime: '120', image: 'https://cf.geekdo-images.com/a/img/catan.jpg', rating: '7.1', type: '' });
+  assert.deepEqual({ ...owned[0] }, { id: '13', name: 'CATAN', year: '1995', minPlayers: '3', maxPlayers: '4', playTime: '120', image: 'https://cf.geekdo-images.com/a/img/catan.jpg', rating: '7.1', type: '', priority: '' });
   assert.equal(owned[1].name, 'Ticket to Ride & Co: "Europe"');
   assert.equal(owned[1].rating, '');
   assert.equal(owned[1].image, '');
+});
+
+test('bggWishlist asks for the wishlist and reads each game\'s priority', async () => {
+  const WISHLIST = `<?xml version="1.0" encoding="utf-8" standalone="yes"?><items totalitems="2" termsofuse="x" pubdate="x">
+    <item objecttype="thing" objectid="266192" subtype="boardgame" collid="1"><name sortindex="1">Wingspan</name><yearpublished>2019</yearpublished>
+      <stats minplayers="1" maxplayers="5" playingtime="70"><rating value="N/A"><average value="8.1"/></rating></stats>
+      <status own="0" wishlist="1" wishlistpriority="2" lastmodified="2025-01-01 10:00:00"/></item>
+    <item objecttype="thing" objectid="13" subtype="boardgame" collid="2"><name sortindex="1">Catan</name><status own="0" wishlist="1"/></item>
+  </items>`;
+  const calls = stubFetch(() => ({ body: WISHLIST }));
+  const list = await bggWishlist('tester');
+  assert.match(calls[0], /mode=wishlist/);
+  assert.deepEqual(list.map((g) => [g.name, g.priority]), [['Wingspan', '2'], ['Catan', '']]);
+  assert.equal(list[0].playTime, '70');
 });
 
 test('bggOwnedCollection says so when BGG is still preparing the export, instead of finding no games', async () => {
