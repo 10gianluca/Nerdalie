@@ -267,12 +267,30 @@ export async function bggThing(ids) {
 
 // Themes (BGG categories) for a list of BGG ids, fetched 20 at a time (the most BGG's thing endpoint
 // allows). `onChunk(found)` gets { id: [categories] } after each batch, so a caller can show progress and
-// keep what it already has if a later batch fails. Ids BGG returns nothing for are reported as [].
-export async function bggThemes(ids, onChunk) {
+// keep what it already has if a later batch fails. Within a batch BGG did answer, an id it has no entry for
+// is reported as [] (so it isn't asked for again). A whole batch coming back empty is treated as a failure
+// instead, so a hiccup on BGG's side is never remembered as "this game has no themes".
+// BGG rate-limits quick-fire requests, so batches go a little apart, and one that fails is tried once more
+// after a longer pause before it counts as a failure. `pauseMs` is that gap (0 in tests).
+export async function bggThemes(ids, onChunk, pauseMs = 900) {
+  const wait = (ms) => (ms ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
+  const fetchBatch = async (batch) => {
+    const things = await bggThing(batch);
+    if (!things.length && batch.length > 1) throw new Error('BoardGameGeek sent back nothing for some games; try again in a moment');
+    return things;
+  };
   for (let i = 0; i < ids.length; i += 20) {
+    if (i) await wait(pauseMs);
     const batch = ids.slice(i, i + 20);
+    let things;
+    try {
+      things = await fetchBatch(batch);
+    } catch (_) {
+      await wait(pauseMs * 2);
+      things = await fetchBatch(batch);
+    }
     const found = Object.fromEntries(batch.map((id) => [id, []]));
-    (await bggThing(batch)).forEach((t) => { found[t.id] = t.categories; });
+    things.forEach((t) => { found[t.id] = t.categories; });
     onChunk(found);
   }
 }
@@ -305,6 +323,11 @@ export async function bggOwnedCollection(username) {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const errorText = doc.querySelector('errors message, error message')?.textContent;
   if (errorText) throw new Error(errorText);
+  // BGG answers "accepted, try again later" with a bare <message> instead of <items> while it prepares the
+  // export; without this it would read as a collection with no games in it.
+  if (doc.documentElement && doc.documentElement.nodeName === 'message') {
+    throw new Error('BoardGameGeek is still preparing your collection. Give it a few seconds and try again.');
+  }
   return [...doc.querySelectorAll('items > item')].map((it) => {
     const stats = it.querySelector('stats');
     const avgRaw = stats?.querySelector('rating > average')?.getAttribute('value') || '';

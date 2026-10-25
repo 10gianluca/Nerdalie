@@ -23,14 +23,16 @@ async function bggFetch(url) {
 }
 
 // The collection endpoint queues the export and answers 202 until it's ready; poll briefly rather
-// than making the browser retry through several round trips of its own.
+// than making the browser retry through several round trips of its own. Netlify stops a function after
+// 10 seconds, so this gives up a little before that (the page then says to try again, and BGG has
+// usually finished by then) instead of being cut off mid-wait with an unhelpful gateway error.
 async function fetchCollection(username) {
   const url = `${BASE}/collection?username=${encodeURIComponent(username)}&own=1&stats=1`;
   let res;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 4; i++) {
     res = await bggFetch(url);
     if (res.status !== 202) return res;
-    await new Promise((r) => setTimeout(r, 1500));
+    if (i < 3) await new Promise((r) => setTimeout(r, 1500)); // about 6 seconds in all, with the requests themselves
   }
   return res;
 }

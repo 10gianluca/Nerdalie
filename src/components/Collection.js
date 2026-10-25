@@ -348,16 +348,21 @@ function Collection() {
   async function loadDecide() {
     setDec({ status: 'loading', error: '', total: 0 });
     try {
+      let warning = '';
       const [owned, decisionsCsv] = await Promise.all([
         bggOwnedCollection(settings.bggUsername),
-        // no Decisions tab yet is normal before the first answer, so a failed read just means "none"
-        fetchSheetCsv(settings.sheetLink, DECISIONS_TAB).catch(() => ''),
+        // a missing Decisions tab isn't an error (Google just answers with the first sheet), so a read that
+        // really fails still lets you carry on, with a warning that answered games may come up again
+        fetchSheetCsv(settings.sheetLink, DECISIONS_TAB).catch((err) => {
+          warning = err.message || 'unknown error';
+          return '';
+        }),
       ]);
       const known = parseDecisions(decisionsCsv);
       setAnswers(known);
       setHistory([]);
       setQueue(undecidedGames(owned, known));
-      setDec({ status: 'ready', error: '', total: owned.length });
+      setDec({ status: 'ready', error: '', total: owned.length, warning });
     } catch (err) {
       setDec({ status: 'error', error: err.message || 'Could not read your BGG collection', total: 0 });
     }
@@ -660,6 +665,10 @@ function Collection() {
                   </div>
                   <div className="gcBar"><div className="gcBarFill" style={{ width: `${dec.total ? Math.round((answeredOwned / dec.total) * 100) : 0}%` }} /></div>
                 </div>
+
+                {dec.warning && (
+                  <div className="gcAlert">Couldn't read your “{DECISIONS_TAB}” tab ({dec.warning}), so games you've already answered may come up again. <button className="gcLinkBtn" onClick={loadDecide}>Try again</button></div>
+                )}
 
                 {!!saving.failed.length && (
                   <div className="gcAlert">
