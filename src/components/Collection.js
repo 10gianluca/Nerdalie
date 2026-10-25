@@ -7,6 +7,7 @@ import {
   buildPatchFromThing, appendRowViaScript, updateRowViaScript, bggGameUrl, bggCollectionUrl, cellAt,
   DECISIONS_TAB, CHOICES, parseDecisions, undecidedGames, saveDecisionViaScript, matchKey,
 } from './collectionUtils';
+import GamePicker from './GamePicker';
 
 const SETTINGS_KEY = 'nerdalie.collection.settings';
 const SCRIPT_HELP = `function doPost(e) {
@@ -62,7 +63,7 @@ const loadSettings = () => {
 
 function Collection() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('collection'); // 'collection' | 'decide' | 'manage'
+  const [tab, setTab] = useState('collection'); // 'collection' | 'decide' | 'pick' | 'manage'
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(() => !loadSettings().sheetLink);
   const [showScriptHelp, setShowScriptHelp] = useState(false);
@@ -577,6 +578,9 @@ function Collection() {
           <button role="tab" aria-selected={tab === 'decide'} className={`gcTab${tab === 'decide' ? ' gcOn' : ''}`} onClick={() => setTab('decide')}>
             Decide{dec.status === 'ready' && queue.length ? <span className="gcCount">{queue.length}</span> : null}
           </button>
+          <button role="tab" aria-selected={tab === 'pick'} className={`gcTab${tab === 'pick' ? ' gcOn' : ''}`} onClick={() => setTab('pick')}>
+            Pick a game
+          </button>
           <button role="tab" aria-selected={tab === 'manage'} className={`gcTab${tab === 'manage' ? ' gcOn' : ''}`} onClick={() => setTab('manage')}>
             Add &amp; sync{missing && missing.length ? <span className="gcCount">{missing.length}</span> : null}
           </button>
@@ -703,6 +707,10 @@ function Collection() {
           </section>
         )}
 
+        {tab === 'pick' && (
+          <GamePicker rows={rows} idx={idx} hasSheet={!!settings.sheetLink} loading={loading} loadError={loadError} onRetry={() => loadSheet(settings.sheetLink)} />
+        )}
+
         {tab === 'manage' && (
           <>
             <section className="gcCard">
@@ -803,6 +811,7 @@ function Collection() {
           <ul>
             <li>The <b>Collection</b> tab and <b>BGG sync</b> read your Sheet and your public "owned" BGG list directly — nothing needs to be typed twice.</li>
             <li><b>Decide</b> shows one game you own at a time. Keep, Discard or Play and see (or press <kbd>K</kbd> <kbd>D</kbd> <kbd>P</kbd>) saves the game and your choice to a second tab of your sheet called <b>Decisions</b>, and the game doesn't come up again. Changed your mind? Use "Change my last answer", or answer it again later by editing the tab.</li>
+            <li><b>Pick a game</b> chooses one of the games in your sheet at random. Narrow it by players, time, type (solo, co-op, team…) and theme, then press Skip until one sounds right. Players, time and type come from your sheet; themes are BoardGameGeek's categories, looked up with the BGGID column and remembered in this browser.</li>
             <li><b>Fill in missing info</b> looks at rows already in your sheet, searches BGG for each one, and — once you confirm the match — fills in only the blank cells, leaving anything you've already typed alone.</li>
             <li>Saving to the sheet works through the small script in Settings — no login needed on this page. If you set the script up before the Decide feature existed, paste in the latest code and redeploy it as a new version (same URL).</li>
             <li>BoardGameGeek has no way for another website to add to a collection there, so if a game isn't on BGG yet, add it there yourself in the normal way; this page only reads what's already there.</li>

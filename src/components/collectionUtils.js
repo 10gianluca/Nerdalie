@@ -230,6 +230,9 @@ export async function bggSearch(query, exact = false) {
 
 const nameOf = (el) => (el ? el.getAttribute('value') || el.textContent || '' : '');
 
+// BGG's own categories for a game ("Fantasy", "Science Fiction", "Card Game", ...), used as its themes.
+export const categoriesFromLinks = (links = []) => links.filter((l) => l.type === 'boardgamecategory' && l.value).map((l) => l.value);
+
 export function modesFromLinks(links = []) {
   const vals = links.map((l) => (l.value || '').toLowerCase());
   const modes = new Set();
@@ -257,8 +260,21 @@ export async function bggThing(ids) {
       image: it.querySelector('image')?.textContent || '',
       rating: avgRaw && avgRaw !== 'N/A' ? Number.parseFloat(avgRaw).toFixed(1) : '',
       type: modesFromLinks(links),
+      categories: categoriesFromLinks(links),
     };
   });
+}
+
+// Themes (BGG categories) for a list of BGG ids, fetched 20 at a time (the most BGG's thing endpoint
+// allows). `onChunk(found)` gets { id: [categories] } after each batch, so a caller can show progress and
+// keep what it already has if a later batch fails. Ids BGG returns nothing for are reported as [].
+export async function bggThemes(ids, onChunk) {
+  for (let i = 0; i < ids.length; i += 20) {
+    const batch = ids.slice(i, i + 20);
+    const found = Object.fromEntries(batch.map((id) => [id, []]));
+    (await bggThing(batch)).forEach((t) => { found[t.id] = t.categories; });
+    onChunk(found);
+  }
 }
 
 // The best few search results, ranked by how closely the name matches (simple word-overlap score).
@@ -429,6 +445,80 @@ export async function saveDecisionViaScript(scriptUrl, game, choice) {
     throw new Error('Your sheet script did not confirm saving. Open Settings, copy the latest script from the setup help into Apps Script, and redeploy it as a new version.');
   }
   return true;
+}
+
+// ---------- "What should we play?" picker ----------
+// Players, time and type come from the sheet; themes are BGG categories looked up by the sheet's BGGID.
+
+// How long the time chips go up to (minutes).
+export const TIME_STEPS = [15, 30, 45, 60, 90, 120];
+
+// A TYPE cell can hold several modes ("solo, co-op"); this splits it into the individual ones.
+export const typeTokens = (cell) => (cell || '').split(/[,/;]+/).map((t) => t.trim()).filter(Boolean);
+
+// Every distinct mode used in the sheet's TYPE column, in first-seen order.
+export function typeChoices(rows, idx) {
+  const seen = new Map();
+  for (const row of rows) {
+    for (const t of typeTokens(cellAt(row, idx.TYPE))) if (!seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t);
+  }
+  return [...seen.values()];
+}
+
+// The sheet's rows that have a game name, as game objects shaped like the BGG ones (plus `row`, the
+// position in the sheet) so the same card can show either.
+export function sheetGames(rows, idx) {
+  return rows
+    .map((row, i) => ({
+      row: i,
+      name: cellAt(row, idx.GAME),
+      year: cellAt(row, idx.YEAR),
+      minPlayers: cellAt(row, idx.MIN),
+      maxPlayers: cellAt(row, idx.MAX),
+      playTime: cellAt(row, idx.TIME),
+      type: cellAt(row, idx.TYPE),
+      rating: cellAt(row, idx.RATING),
+      image: cellAt(row, idx.IMAGE),
+      id: /^\d+$/.test(cellAt(row, idx.BGGID)) ? cellAt(row, idx.BGGID) : '',
+    }))
+    .filter((g) => g.name);
+}
+
+const toNumber = (v) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+// The games that fit what's wanted. Everything is optional:
+//   players  - a count the game must support (a blank min/max is forgiven, as in the Collection filter)
+//   maxTime  - at most this many minutes (a game with no time listed still counts)
+//   type     - one mode, e.g. "co-op"; a game with no type listed doesn't count
+//   themes   - any of these BGG categories; a game with no BGG info doesn't count
+// `themeMap` is { bggId: [categories] }.
+export function pickableGames(games, themeMap = {}, { players = null, maxTime = null, type = '', themes = [] } = {}) {
+  const wantedType = type.trim().toLowerCase();
+  const wantedThemes = new Set(themes);
+  return games.filter((g) => {
+    if (players != null) {
+      const min = toNumber(g.minPlayers) ?? 1;
+      const max = toNumber(g.maxPlayers) ?? Infinity;
+      if (players < min || players > max) return false;
+    }
+    if (maxTime != null) {
+      const t = toNumber(g.playTime);
+      if (t != null && t > maxTime) return false;
+    }
+    if (wantedType && !typeTokens(g.type).some((t) => t.toLowerCase() === wantedType)) return false;
+    if (wantedThemes.size && !(themeMap[g.id] || []).some((c) => wantedThemes.has(c))) return false;
+    return true;
+  });
+}
+
+// Each theme the given games have, with how many of them, most common first.
+export function themeCounts(games, themeMap = {}) {
+  const counts = new Map();
+  for (const g of games) for (const c of themeMap[g.id] || []) counts.set(c, (counts.get(c) || 0) + 1);
+  return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 export const bggGameUrl = (id) => `https://boardgamegeek.com/boardgame/${id}`;
