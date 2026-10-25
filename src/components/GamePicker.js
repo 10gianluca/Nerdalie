@@ -194,7 +194,7 @@ function GamePicker({ rows, idx, hasSheet, loading, loadError, onRetry }) {
             )}
           </PickRow>
         ) : (
-          <p className="gcHint">Themes come from BoardGameGeek. Add a <b>BGGID</b> column to your sheet (Add &amp; sync → Fill in missing info can then fill it in) to filter by theme.</p>
+          <p className="gcHint">Themes come from BoardGameGeek. Add a <b>BGGID</b> column to your sheet (Sync → Fill in missing info can then fill it in) to filter by theme.</p>
         )}
 
         {ids.length > 0 && (

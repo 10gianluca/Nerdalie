@@ -165,8 +165,9 @@ export function sortEntries(entries, idx, key, dir = 'asc') {
 }
 
 // A loose key for matching a sheet row to a BGG item: lowercase name with punctuation/spacing
-// stripped, so "Brass: Birmingham" and "brass birmingham" line up.
-export const matchKey = (name) => (name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+// stripped, so "Brass: Birmingham" and "brass birmingham" line up. Apostrophes are dropped rather than
+// turned into a space, so "Dead Man's Draw" and a sheet row typed "Dead Mans Draw" still match.
+export const matchKey = (name) => (name || '').toLowerCase().replace(/['’`]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
 // The canonical columns a BGG match can fill in on an existing row.
 const ENRICHABLE = ['YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'RATING', 'IMAGE', 'BGGID'];
@@ -349,6 +350,20 @@ export async function bggOwnedCollection(username) {
 export function missingFromSheet(owned, rows, idx) {
   const { names, ids } = existingKeys(rows, idx);
   return owned.filter((g) => !(g.id && ids.has(g.id)) && !names.has(matchKey(g.name)));
+}
+
+// What adding a game would do, given the sheet's rows and the games you own on BGG (null when that list
+// isn't known). Either one already having the game (by BGG id, or by name) means there's nothing to add there:
+//   sheet: 'add' | 'have'      bgg: 'have' | 'missing' | 'unknown'
+export function addPlan(item, title, rows, idx, owned) {
+  const { names, ids } = existingKeys(rows, idx);
+  const inSheet = (item.id && ids.has(item.id)) || [item.name, title].some((n) => n && names.has(matchKey(n)));
+  let bgg = 'unknown';
+  if (owned && item.id) {
+    const key = matchKey(item.name);
+    bgg = owned.some((g) => g.id === item.id || (key && matchKey(g.name) === key)) ? 'have' : 'missing';
+  }
+  return { sheet: inSheet ? 'have' : 'add', bgg };
 }
 
 // A new sheet row, in the sheet's own column order, filling whichever of the canonical columns

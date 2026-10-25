@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseDecisions, undecidedGames, shuffled, saveDecisionViaScript, matchKey, CHOICES, DECISIONS_TAB,
-  parseCsv, buildHeaderIndex, typeTokens, typeChoices, sheetGames, pickableGames, themeCounts, categoriesFromLinks, TIME_STEPS,
+  parseCsv, buildHeaderIndex, addPlan, typeTokens, typeChoices, sheetGames, pickableGames, themeCounts, categoriesFromLinks, TIME_STEPS,
 } from './collectionUtils.js';
 
 const mulberry32 = (a) => () => {
@@ -168,4 +168,38 @@ test('categoriesFromLinks keeps only BGG categories', () => {
   ];
   assert.deepEqual(categoriesFromLinks(links), ['Fantasy', 'Card Game']);
   assert.deepEqual(categoriesFromLinks(), []);
+});
+
+// ---------- adding a game to the sheet and BGG ----------
+
+test('addPlan: a game in neither place is added to the sheet and still missing on BGG', () => {
+  const item = { id: '999', name: 'Brand New Game' };
+  assert.deepEqual(addPlan(item, 'Brand New Game', rows, idx, [{ id: '13', name: 'Catan' }]), { sheet: 'add', bgg: 'missing' });
+});
+
+test('addPlan: finds the game in the sheet by BGG id or by name, ignoring case and punctuation', () => {
+  assert.equal(addPlan({ id: '13', name: 'Something Else' }, 'x', rows, idx, null).sheet, 'have');
+  assert.equal(addPlan({ id: '999', name: 'LOST cities!' }, 'x', rows, idx, null).sheet, 'have');
+  assert.equal(addPlan({ id: '999', name: 'Different' }, 'azul', rows, idx, null).sheet, 'have', 'the title you typed counts too');
+  assert.equal(addPlan({ id: '999', name: 'Different' }, 'nope', rows, idx, null).sheet, 'add');
+});
+
+test('addPlan: finds the game among your BGG games by id or name; unknown when that list is missing', () => {
+  const owned = [{ id: '13', name: 'CATAN' }, { id: '5', name: "Uncle Ben's Game" }];
+  assert.equal(addPlan({ id: '13', name: 'x' }, 'x', rows, idx, owned).bgg, 'have');
+  assert.equal(addPlan({ id: '77', name: "uncle bens game" }, 'x', rows, idx, owned).bgg, 'have');
+  assert.equal(addPlan({ id: '77', name: 'Other' }, 'x', rows, idx, owned).bgg, 'missing');
+  assert.equal(addPlan({ id: '77', name: 'Other' }, 'x', rows, idx, null).bgg, 'unknown');
+  assert.equal(addPlan({ id: '', name: 'Other' }, 'x', rows, idx, owned).bgg, 'unknown', 'no BGG id, so no page to send you to');
+});
+
+test('addPlan: a game in both places has nothing left to do', () => {
+  assert.deepEqual(addPlan({ id: '13', name: 'Catan' }, 'Catan', rows, idx, [{ id: '13', name: 'Catan' }]), { sheet: 'have', bgg: 'have' });
+});
+
+test('matchKey ignores apostrophes, case and punctuation', () => {
+  assert.equal(matchKey("Dead Man's Draw"), matchKey('dead mans draw'));
+  assert.equal(matchKey('Dead Man’s Draw'), matchKey("Dead Man's Draw"));
+  assert.equal(matchKey('Brass: Birmingham'), matchKey('brass birmingham'));
+  assert.notEqual(matchKey('Catan'), matchKey('Catan Junior'));
 });

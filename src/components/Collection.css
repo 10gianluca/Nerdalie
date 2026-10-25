@@ -146,6 +146,9 @@ html, body { margin: 0; padding: 0; }
 .gcReviewHead { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 12px; }
 .gcCover { width: 84px; height: 84px; object-fit: cover; border-radius: 8px; flex: 0 0 auto; background: var(--line); }
 .gcExtras { margin: 12px 0; display: grid; gap: 10px; }
+.gcStatus { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.gcStOk { color: var(--good); font-weight: 600; }
+.gcAddResult p { margin: 4px 0; }
 
 /* ---------- decide ---------- */
 .gcDecide { padding: 22px; }
@@ -219,6 +222,11 @@ html, body { margin: 0; padding: 0; }
 .gcRules li { margin-bottom: 8px; color: var(--text); font-size: 14px; }
 
 /* ---------- small screens ---------- */
+/* five tabs don't fit across a phone with their count badges, and the tab matters more than the number */
+@media (max-width: 440px) {
+  .gcTab .gcCount { display: none; }
+  .gcTab { padding-left: 8px; padding-right: 8px; }
+}
 @media (max-width: 640px) {
   .gcWrap { padding: 14px 12px 60px; }
   .gcTitle { font-size: 24px; }
