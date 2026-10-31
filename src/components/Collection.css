@@ -232,6 +232,8 @@ html, body { margin: 0; padding: 0; }
 .gcList li b { color: var(--ink); overflow-wrap: anywhere; }
 .gcList li span { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .gcPlaysWrap { max-height: 46vh; border: 1px solid var(--line); border-radius: 10px; }
+.gcListCard { scroll-margin-top: 12px; }
+.gcTable tbody tr.gcFresh td { background: var(--good-soft); }
 .gcTable td.gcNotes { white-space: normal; min-width: 160px; color: var(--muted); }
 .gcLast { margin: 0 0 10px; color: var(--muted); font-size: 13px; }
 .gcFact.gcPriority { color: var(--accent); background: var(--accent-soft); border-color: transparent; }

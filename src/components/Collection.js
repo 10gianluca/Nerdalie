@@ -10,6 +10,7 @@ import {
 import GamePicker from './GamePicker';
 import Decider, { OWNED_DECK, WISHLIST_DECK } from './Decider';
 import PlaysTab from './PlaysTab';
+import NewList from './NewList';
 import { SCRIPT_HELP } from './sheetScript';
 
 const SETTINGS_KEY = 'nerdalie.collection.settings';
@@ -23,7 +24,7 @@ const loadSettings = () => {
 
 function Collection() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('collection'); // 'collection' | 'decide' | 'pick' | 'plays' | 'wishlist' | 'sync' | 'add'
+  const [tab, setTab] = useState('collection'); // 'collection' | 'decide' | 'pick' | 'plays' | 'wishlist' | 'sync' | 'add' | 'newlist'
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(() => !loadSettings().sheetLink);
   const [showScriptHelp, setShowScriptHelp] = useState(false);
@@ -75,6 +76,7 @@ function Collection() {
   const [discards, setDiscards] = useState(() => new Set());
   const [deckKey, setDeckKey] = useState(0); // bumping this starts the decks over
   const [deckCounts, setDeckCounts] = useState({ owned: null, wishlist: null });
+  const [newListCount, setNewListCount] = useState(null); // games in the New List tab, once it has been read
 
   const idx = useMemo(() => buildHeaderIndex(headers), [headers]);
   const extras = useMemo(() => extraHeaders(headers, idx), [headers, idx]);
@@ -117,6 +119,7 @@ function Collection() {
       setMissing(null);
       closeReview();
       setDeckKey((k) => k + 1);
+      setNewListCount(null);
       setPlays({ status: 'idle', error: '', items: [] });
       setDiscards(new Set());
       setBggOwned({ status: 'idle', items: [], error: '' });
@@ -535,7 +538,7 @@ function Collection() {
                       <li>Set <b>Execute as: Me</b> and <b>Who has access: Anyone</b>, then <b>Deploy</b> (approve the permission prompt — it's your own script on your own sheet).</li>
                       <li>Copy the <b>Web app URL</b> it gives you and paste it below.</li>
                     </ol>
-                    <p className="gcNote"><b>Already set this up before?</b> Replace the code with the version above, then <b>Deploy → Manage deployments</b>, click the pencil, choose <b>Version: New version</b> and <b>Deploy</b>. The URL stays the same, so there's nothing to change here. The new version adds the <b>Decisions</b>, <b>Wishlist</b> and <b>Plays</b> tabs.</p>
+                    <p className="gcNote"><b>Already set this up before?</b> Replace the code with the version above, then <b>Deploy → Manage deployments</b>, click the pencil, choose <b>Version: New version</b> and <b>Deploy</b>. The URL stays the same, so there's nothing to change here. The new version adds the <b>Decisions</b>, <b>Wishlist</b>, <b>Plays</b> and <b>New List</b> tabs.</p>
                     <p className="gcWarn">Keep this URL private — anyone who has it can add rows to your sheet. It's only saved in this browser, never in the site's code.</p>
                     <label className="gcField">
                       <span>Sheet script URL</span>
@@ -573,6 +576,9 @@ function Collection() {
           </button>
           <button role="tab" aria-selected={tab === 'add'} className={`gcTab${tab === 'add' ? ' gcOn' : ''}`} onClick={() => setTab('add')}>
             Add
+          </button>
+          <button role="tab" aria-selected={tab === 'newlist'} className={`gcTab${tab === 'newlist' ? ' gcOn' : ''}`} onClick={() => setTab('newlist')}>
+            New list{newListCount ? <span className="gcCount">{newListCount}</span> : null}
           </button>
         </nav>
 
@@ -649,6 +655,22 @@ function Collection() {
             settings={settings}
             onNeedScript={needScript}
             onCount={(n) => setDeckCounts((c) => ({ ...c, wishlist: n }))}
+          />
+        </div>
+
+        {/* stays mounted too, so a game you're part-way through filling in isn't lost when you look at another tab */}
+        <div hidden={tab !== 'newlist'}>
+          <NewList
+            key={`newlist-${deckKey}`}
+            active={tab === 'newlist'}
+            hasSheet={!!settings.sheetLink}
+            headers={headers}
+            rows={rows}
+            idx={idx}
+            loading={loading}
+            settings={settings}
+            onNeedScript={needScript}
+            onCount={setNewListCount}
           />
         </div>
 
@@ -790,6 +812,7 @@ function Collection() {
           <ul>
             <li>The <b>Collection</b> tab and <b>Sync</b> read your Sheet and your public "owned" BGG list directly — nothing needs to be typed twice. <b>Sync</b> adds the games you own on BGG that your sheet is missing, one at a time.</li>
             <li><b>Add</b> searches BGG for a game. It adds it to your sheet unless it's already there, and checks your BGG collection too. If the game isn't in your BGG collection, BGG's page opens so you can press Add to Collection yourself: BoardGameGeek doesn't let other websites change your collection.</li>
+            <li><b>New list</b> is for games you're thinking about. Search BGG, tap the right game if several match, and type in your own columns (the ones BGG doesn't know, like House, Played and Complete). BGG fills in the rest. It goes in a <b>New List</b> tab of your sheet, which has the same columns as your main sheet plus a <b>BGG Link</b>. A game that's already on that list isn't added twice.</li>
             <li><b>Decide</b> shows one game you own at a time. Keep, Discard or Play and see (or press <kbd>K</kbd> <kbd>D</kbd> <kbd>P</kbd>) saves the game and your choice to a second tab of your sheet called <b>Decisions</b>, and the game doesn't come up again. Changed your mind? Use "Change my last answer", or answer it again later by editing the tab.</li>
             <li><b>Wishlist</b> does the same for your BGG wishlist, most wanted first: Buy, Drop or Later (<kbd>B</kbd> <kbd>D</kbd> <kbd>L</kbd>), saved in a <b>Wishlist</b> tab. It never changes the wishlist on BGG itself, so remove dropped games there yourself.</li>
             <li><b>Plays</b> is a log of what you've actually played (date, game, who, winner, notes), kept in a <b>Plays</b> tab. <b>Pick a game</b> uses it for "never played" and "not in 30+ days", and can leave out games you marked Discard.</li>

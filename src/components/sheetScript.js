@@ -5,6 +5,8 @@
 //   { decision }             one answer in the Decisions tab (Keep / Discard / Play and see) or the Wishlist tab
 //                            (Buy / Drop / Later): Game, Choice. Answering again replaces the earlier answer.
 //   { play }                 one row in the Plays tab: Date, Game, Players, Winner, Notes
+//   { newList }              one game in the New List tab: the column names and the values under them. The tab is made
+//                            with those columns the first time; after that each value goes under the column of the same name.
 //   { ping }                 changes nothing; answers with the script's version so the page can tell it is up to date
 // Each reply says what it did, so the page can tell when an older copy of this script is still deployed.
 export const SCRIPT_HELP = `function doPost(e) {
@@ -12,8 +14,8 @@ export const SCRIPT_HELP = `function doPost(e) {
   var sheet = ss.getSheets()[0];
   var data = JSON.parse(e.postData.contents);
 
-  // The page asks this before it saves to the Wishlist tab, to be sure it is talking to this version
-  if (data.ping) return reply({ ok: true, kind: 'ping', version: 3 });
+  // The page asks this before it saves to the Wishlist or New List tab, to be sure it is talking to this version
+  if (data.ping) return reply({ ok: true, kind: 'ping', version: 4 });
 
   if (data.decision) {
     // Keep / Discard / Play and see answers (Decisions) and Buy / Drop / Later answers (Wishlist): Game, Choice
@@ -37,6 +39,33 @@ export const SCRIPT_HELP = `function doPost(e) {
     cells.setNumberFormat('@'); // keep it as typed, so 2026-10-25 stays a plain date
     cells.setValues([[data.play.date, data.play.game, data.play.players, data.play.winner, data.play.notes]]);
     return reply({ ok: true, kind: 'play' });
+  }
+
+  if (data.newList) {
+    // A game for the New List tab: the column names (your main sheet's, ending with BGG Link) and the values for them.
+    // A name the tab doesn't have yet gets a new column at the end, so changing your main sheet's columns later is fine.
+    var list = tabFor(ss, 'New List', data.newList.header);
+    var have = list.getRange(1, 1, 1, list.getLastColumn()).getValues()[0];
+    var out = have.map(function () { return ''; });
+    for (var k = 0; k < data.newList.header.length; k++) {
+      var want = String(data.newList.header[k]).trim().toLowerCase();
+      if (!want) continue;
+      var at = -1;
+      for (var c = 0; c < have.length; c++) {
+        if (String(have[c]).trim().toLowerCase() === want) { at = c; break; }
+      }
+      if (at < 0) {
+        have.push(data.newList.header[k]);
+        out.push('');
+        at = have.length - 1;
+        var head = list.getRange(1, at + 1);
+        head.setValue(data.newList.header[k]);
+        head.setFontWeight('bold');
+      }
+      out[at] = data.newList.row[k];
+    }
+    list.getRange(list.getLastRow() + 1, 1, 1, out.length).setValues([out]);
+    return reply({ ok: true, kind: 'newlist' });
   }
 
   if (data.update) {

@@ -118,9 +118,50 @@ test('a play creates the Plays tab and each one adds a row, stored as text so th
 test('a ping answers with the version and changes nothing', () => {
   const main = fakeSheet('Games', [['GAME'], ['Catan']]);
   const sheets = [main];
-  assert.deepEqual(run(sheets, { ping: true }), { ok: true, kind: 'ping', version: 3 });
+  assert.deepEqual(run(sheets, { ping: true }), { ok: true, kind: 'ping', version: 4 });
   assert.equal(sheets.length, 1);
   assert.deepEqual(main.rows, [['GAME'], ['Catan']]);
+});
+
+const HEADER = ['Game', 'Year', 'House', 'Played', 'Complete', 'BGG Link'];
+const newList = (row, header = HEADER) => ({ newList: { header, row } });
+
+test('the first New List game creates the tab at the end with the given columns, bold and frozen', () => {
+  const main = fakeSheet('Games', [['Game', 'Year', 'House', 'Played', 'Complete'], ['Catan', '1995', 'Sam', 'Yes', 'Yes']]);
+  const sheets = [main];
+  const r = run(sheets, newList(['Azul', '2017', 'Nalie', 'No', 'No', 'https://boardgamegeek.com/boardgame/230802']));
+  assert.deepEqual(r, { ok: true, kind: 'newlist' });
+  assert.equal(sheets.length, 2);
+  assert.equal(sheets[1].name, 'New List');
+  assert.deepEqual(sheets[1].rows, [HEADER, ['Azul', '2017', 'Nalie', 'No', 'No', 'https://boardgamegeek.com/boardgame/230802']]);
+  assert.equal(sheets[1].frozen, 1);
+  assert.equal(sheets[1].bold, 'bold');
+  assert.deepEqual(main.rows[1], ['Catan', '1995', 'Sam', 'Yes', 'Yes'], 'the main sheet is untouched');
+});
+
+test('later games are added under the tab\'s own columns, matched by name', () => {
+  // a tab whose columns are in another order, as if the main sheet was rearranged after it was made
+  const list = fakeSheet('New List', [['BGG Link', 'Game', 'Year']]);
+  const sheets = [fakeSheet('Games', [['Game']]), list];
+  run(sheets, newList(['Azul', '2017', 'Nalie', 'No', 'No', 'https://x/230802']));
+  assert.deepEqual(list.rows[0],['BGG Link', 'Game', 'Year', 'House', 'Played', 'Complete'], 'columns the tab lacked were added at the end');
+  assert.deepEqual(list.rows[1], ['https://x/230802', 'Azul', '2017', 'Nalie', 'No', 'No']);
+  run(sheets, newList(['Wingspan', '2019', 'Sam', 'Yes', 'Yes', 'https://x/266192']));
+  assert.deepEqual(list.rows[2], ['https://x/266192', 'Wingspan', '2019', 'Sam', 'Yes', 'Yes']);
+  assert.equal(sheets.length, 2, 'no second tab');
+});
+
+test('New List column names match whatever the case, and a blank column name is skipped', () => {
+  const list = fakeSheet('New List', [['GAME', 'house']]);
+  const sheets = [fakeSheet('Games', [['Game']]), list];
+  run(sheets, newList(['Azul', 'Nalie', 'ignored'], ['Game', 'House', '']));
+  assert.deepEqual(list.rows, [['GAME', 'house'], ['Azul', 'Nalie']]);
+});
+
+test('an empty New List tab gets its header instead of crashing', () => {
+  const sheets = [fakeSheet('Games', [['Game']]), fakeSheet('New List', [])];
+  assert.equal(run(sheets, newList(['Azul', '2017', '', '', '', 'u'])).kind, 'newlist');
+  assert.deepEqual(sheets[1].rows, [HEADER, ['Azul', '2017', '', '', '', 'u']]);
 });
 
 test('the original add-row and update-row requests still work', () => {

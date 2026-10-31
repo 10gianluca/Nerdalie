@@ -253,6 +253,7 @@ export async function bggThing(ids) {
     const links = [...it.querySelectorAll('link')].map((l) => ({ type: l.getAttribute('type'), value: l.getAttribute('value') || '' }));
     return {
       id: it.getAttribute('id') || '',
+      kind: it.getAttribute('type') || 'boardgame', // 'boardgame' or 'boardgameexpansion'
       name: nameOf(it.querySelector('name[type="primary"]') || it.querySelector('name')),
       year: it.querySelector('yearpublished')?.getAttribute('value') || '',
       minPlayers: it.querySelector('minplayers')?.getAttribute('value') || '',
@@ -493,18 +494,19 @@ async function postToScript(scriptUrl, body) {
 
 // A script from before the Wishlist tab existed would take a wishlist answer and quietly file it in Decisions. So
 // before the first save to any other tab, this asks the script to say which version it is (a harmless request that an
-// older script rejects without writing anything), and remembers the answer for each script address.
-const verifiedScripts = new Set();
-async function requireCurrentScript(scriptUrl) {
-  if (verifiedScripts.has(scriptUrl)) return;
+// older script rejects without writing anything), and remembers the answer for each script address. A save that needs a
+// newer feature says which version it needs.
+const verifiedScripts = new Map(); // script address -> the version it said it was
+async function requireCurrentScript(scriptUrl, minVersion = 1) {
+  if ((verifiedScripts.get(scriptUrl) || 0) >= minVersion) return;
   let data = null;
   try {
     data = await postToScript(scriptUrl, { ping: true });
   } catch (_) {
     // an older script fails on a request it doesn't know, which is the same answer as not being current
   }
-  if (!data || data.kind !== 'ping') throw new Error(OUTDATED_SCRIPT);
-  verifiedScripts.add(scriptUrl);
+  if (!data || data.kind !== 'ping' || (Number(data.version) || 0) < minVersion) throw new Error(OUTDATED_SCRIPT);
+  verifiedScripts.set(scriptUrl, Number(data.version) || 1);
 }
 
 // Saves one answer in the named tab through the same Apps Script Web App. The script must reply
@@ -581,6 +583,119 @@ export const daysSince = (ts, now = Date.now()) => (ts == null ? null : Math.max
 export async function savePlayViaScript(scriptUrl, play) {
   const data = await postToScript(scriptUrl, { play });
   if (!data || data.kind !== 'play') throw new Error(OUTDATED_SCRIPT);
+  return true;
+}
+
+// ---------- the New list tab ----------
+// A fourth tab of the sheet, "New List", holds games you're thinking about. It has every column of your main sheet (the ones
+// BGG fills in, and your own, like House, Played and Complete) plus a BGG Link, so each game is one row you can click through from.
+
+export const NEWLIST_TAB = 'New List';
+export const NEWLIST_LINK = 'BGG Link';
+const isLinkHeader = (h) => normalizeHeader(h) === 'bgg link';
+
+// The New List columns for a main sheet with these headers: the same ones in the same order, ending with the BGG link
+// (unless the main sheet already has a column of that name, which then gets the link).
+export function newListLayout(headers) {
+  const header = headers.map((h) => (h || '').trim());
+  let link = header.findIndex(isLinkHeader);
+  if (link < 0) {
+    header.push(NEWLIST_LINK);
+    link = header.length - 1;
+  }
+  return { header, link };
+}
+
+// The main sheet's own columns, the ones BGG can't fill in, as { name, i } for the form. A column with no name has nothing
+// to type into, and the link is filled in for you.
+export function newListFields(headers, idx) {
+  const { link } = newListLayout(headers);
+  return extraHeaders(headers, idx).filter(({ name, i }) => name.trim() && i !== link);
+}
+
+// The values already used in a column of the main sheet (say House: Sam, Nalie), most used first, to tap instead of type.
+// A column with lots of different values is free text, and gives none.
+export function commonValues(rows, col, { limit = 6, maxDistinct = 8, maxLength = 30 } = {}) {
+  if (col < 0) return [];
+  const counts = new Map();
+  for (const r of rows) {
+    const v = cellAt(r, col);
+    if (!v) continue;
+    const seen = counts.get(v.toLowerCase()) || { value: v, n: 0 };
+    seen.n += 1;
+    counts.set(v.toLowerCase(), seen);
+  }
+  if (counts.size > maxDistinct) return [];
+  return [...counts.values()].filter((c) => c.value.length <= maxLength).sort((a, b) => b.n - a.n).slice(0, limit).map((c) => c.value);
+}
+
+// One New List row, in the columns newListLayout gives: what BGG knows, your own values, and the link to the game's BGG page.
+export function buildNewListRow(headers, idx, thing, name, extraValues = {}) {
+  const { link } = newListLayout(headers);
+  const row = buildRowFromThing(headers, idx, thing, name, extraValues);
+  row[link] = thing.id ? bggGameUrl(thing.id) : '';
+  return row;
+}
+
+const rowKey = (row) => {
+  const cells = row.map((c) => (c || '').trim());
+  while (cells.length && !cells[cells.length - 1]) cells.pop();
+  return cells.join('\u0001');
+};
+
+// The New List tab (read as CSV) as { header, rows }, or null when there isn't one yet. Google answers a missing tab with the
+// first sheet instead, so a table with no BGG Link column, or one that is just the main sheet again, counts as missing.
+export function parseNewList(text, mainHeaders = [], mainRows = []) {
+  const table = parseCsv(text || '');
+  if (!table.length) return null;
+  const header = table[0].map((h) => (h || '').trim());
+  if (!header.some(isLinkHeader)) return null;
+  if (mainHeaders.length) {
+    const main = [mainHeaders, ...mainRows].map(rowKey);
+    if (main.length === table.length && table.every((r, i) => rowKey(r) === main[i])) return null;
+  }
+  return { header, rows: table.slice(1) };
+}
+
+// Is this game already in the New List tab, by BGG id (its column, or the id in the link) or by name?
+export function inNewList(list, item, name) {
+  if (!list) return false;
+  const idx = buildHeaderIndex(list.header);
+  const link = list.header.findIndex(isLinkHeader);
+  const keys = [item.name, name].filter(Boolean).map(matchKey).filter(Boolean);
+  return list.rows.some((row) => {
+    const id = cellAt(row, idx.BGGID) || (cellAt(row, link).match(/\/(\d+)(?:\/|$)/) || [])[1] || '';
+    const key = matchKey(cellAt(row, idx.GAME));
+    return !!((item.id && id === item.id) || (key && keys.includes(key)));
+  });
+}
+
+// How the script files a row in the tab: the value under each column goes in the tab's column of the same name, and a name
+// the tab hasn't got yet becomes a new column at the end. Returns the tab's header and the row as they now stand, so the page
+// can show the new game straight away. An empty `listHeader` is a tab that doesn't exist yet.
+export function fileInList(listHeader, header, row) {
+  const outHeader = listHeader.slice();
+  const outRow = listHeader.map(() => '');
+  header.forEach((h, k) => {
+    const key = normalizeHeader(h);
+    if (!key) return;
+    let at = outHeader.findIndex((x) => normalizeHeader(x) === key);
+    if (at < 0) {
+      outHeader.push(h);
+      outRow.push('');
+      at = outHeader.length - 1;
+    }
+    outRow[at] = row[k];
+  });
+  return { header: outHeader, row: outRow };
+}
+
+// Adds one game to the New List tab through the sheet's Apps Script. Needs script version 4 or newer, and says so when
+// it isn't, instead of looking as if it worked.
+export async function saveNewListRowViaScript(scriptUrl, header, row) {
+  await requireCurrentScript(scriptUrl, 4);
+  const data = await postToScript(scriptUrl, { newList: { header, row } });
+  if (!data || data.kind !== 'newlist') throw new Error(OUTDATED_SCRIPT);
   return true;
 }
 
