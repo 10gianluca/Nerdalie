@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  bggFindCandidates, bggGameUrl, fetchSheetCsv, addPlan, buildHeaderIndex, cellAt, commonValues, newListLayout, newListFields,
+  bggSearchAll, bggThing, bggGameUrl, fetchSheetCsv, addPlan, buildHeaderIndex, cellAt, commonValues, newListLayout, newListFields,
   buildNewListRow, parseNewList, inNewList, fileInList, saveNewListRowViaScript, matchKey, NEWLIST_TAB,
 } from './collectionUtils';
 
-/* The New list tab: search BGG, pick the right game, type in your own columns (the ones BGG doesn't know, like House, Played
-   and Complete), and it goes into a "New List" tab of your sheet with everything else filled in from BGG and a link to the
-   game's BGG page. The tab has the same columns as your main sheet, plus the link. */
+/* The New list tab: search BGG, tap the right game from everything that matches, type in your own columns (the ones BGG
+   doesn't know, like House, Played and Complete), and it goes into a "New List" tab of your sheet with everything else filled
+   in from BGG and a link to the game's BGG page. The tab has the same columns as your main sheet, plus the link. */
+
+const PAGE = 20; // matches shown at a time, and the most BGG will give details for in one request
 
 const facts = (g) => [
   g.year,
@@ -19,7 +21,12 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
   const [title, setTitle] = useState('');
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
-  const [candidates, setCandidates] = useState([]);
+  const [matches, setMatches] = useState([]); // everything BGG found for the search: { id, name, year, kind }, best first
+  const [details, setDetails] = useState({}); // BGG's full details (cover, players, rating...) by id, as they are fetched
+  const [shown, setShown] = useState(PAGE); // how many matches are on screen
+  const [gamesOnly, setGamesOnly] = useState(false); // leave out the expansions
+  const [pickingId, setPickingId] = useState(''); // a match whose details are being fetched because you tapped it
+  const [detailsFailed, setDetailsFailed] = useState(false);
   const [picked, setPicked] = useState(null); // the BGG game you chose
   const [name, setName] = useState('');
   const [values, setValues] = useState({}); // your own columns: { columnIndex: text }
@@ -29,7 +36,10 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
   const added = useRef([]); // the games added on this visit: { id, name, header, row }
   const listCard = useRef(null);
   const formCard = useRef(null);
+  const reviewCard = useRef(null);
+  const asked = useRef(new Set()); // ids whose details have been asked for
 
+  const visible = useMemo(() => (gamesOnly ? matches.filter((m) => m.kind !== 'boardgameexpansion') : matches), [matches, gamesOnly]);
   const fields = useMemo(() => newListFields(headers, idx), [headers, idx]);
   const choices = useMemo(() => Object.fromEntries(fields.map(({ i }) => [i, commonValues(rows, i)])), [fields, rows]);
   const ready = hasSheet && !loading && headers.length > 0 && idx.GAME >= 0;
@@ -73,24 +83,69 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
     if (done && listCard.current && listCard.current.scrollIntoView) listCard.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [done]);
 
-  function pick(game) {
-    setPicked(game);
-    setName(game.name);
-    setValues({});
-    setError('');
+  // The search only gives names, so the cover, players and rating of the matches on screen are fetched a page at a time,
+  // in the background, and fill in as they arrive.
+  async function loadDetails(items) {
+    const ids = items.map((m) => m.id).filter((id) => !asked.current.has(id));
+    ids.forEach((id) => asked.current.add(id));
+    for (let i = 0; i < ids.length; i += PAGE) {
+      const batch = ids.slice(i, i + PAGE);
+      try {
+        const things = await bggThing(batch);
+        setDetails((d) => ({ ...d, ...Object.fromEntries(things.map((t) => [t.id, t])) }));
+      } catch (_) {
+        batch.forEach((id) => asked.current.delete(id)); // so showing them again tries again
+        setDetailsFailed(true);
+      }
+    }
   }
+
+  useEffect(() => {
+    loadDetails(visible.slice(0, shown));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, shown]);
+
+  // Tapping a match: its full details are needed to fill the row, so fetch them now if they haven't arrived yet.
+  async function pick(match) {
+    setError('');
+    let full = details[match.id];
+    if (!full) {
+      setPickingId(match.id);
+      try {
+        [full] = await bggThing([match.id]);
+      } catch (err) {
+        setError(err.message || 'Could not get that game from BGG.');
+      }
+      setPickingId('');
+      if (!full) {
+        setError((e) => e || "BGG didn't send that game's details. Try again.");
+        return;
+      }
+      setDetails((d) => ({ ...d, [full.id]: full }));
+    }
+    setPicked(full);
+    setName(full.name);
+    setValues({});
+  }
+
+  // Bring the form into view when a game is picked: the match you tapped may be far down a long list.
+  useEffect(() => {
+    if (picked && reviewCard.current && reviewCard.current.scrollIntoView) reviewCard.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [picked]);
 
   async function search(e) {
     e.preventDefault();
     if (!title.trim()) return;
     setSearching(true);
     setError('');
-    setCandidates([]);
+    setMatches([]);
+    setShown(PAGE);
+    setDetailsFailed(false);
     setPicked(null);
     setDone(null);
     try {
-      const found = await bggFindCandidates(title, 8);
-      setCandidates(found);
+      const found = await bggSearchAll(title);
+      setMatches(found);
       if (!found.length) setError('No matches on BGG for that title. Try a different spelling.');
       else if (found.length === 1) pick(found[0]); // nothing to choose between
     } catch (err) {
@@ -135,7 +190,7 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
       setList({ status: 'ready', error: '', data: { header: filed.header, rows: [...(current ? current.rows : []), filed.row] } });
       setDone({ name: finalName, id: picked.id });
       setPicked(null);
-      setCandidates([]);
+      setMatches([]);
       setTitle('');
     } catch (err) {
       setError(err.message || 'Could not save that game. Double check the script URL in Settings.');
@@ -167,25 +222,8 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
         </form>
         {error && !picked && <p className="gcError">{error}</p>}
 
-        {candidates.length > 1 && (
-          <>
-            <p className="gcHint">{candidates.length} games match. Tap the right one.</p>
-            <div className="gcCandidates">
-              {candidates.map((c) => (
-                <button key={c.id} type="button" className={`gcCandidate${picked && picked.id === c.id ? ' gcSelected' : ''}`} onClick={() => pick(c)}>
-                  {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
-                  <span className="gcCandName">{c.name}</span>
-                  {c.kind === 'boardgameexpansion' && <span className="gcTag">Expansion</span>}
-                  {inNewList(list.data, c, '') && <span className="gcTag">On your list</span>}
-                  <span className="gcMuted">{facts(c)}</span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
         {picked && (
-          <div className="gcReview">
+          <div className="gcReview" ref={reviewCard}>
             <div className="gcReviewHead">
               {picked.image ? <img className="gcCover" src={picked.image} alt="" onError={(e) => (e.target.style.visibility = 'hidden')} /> : <div className="gcCover" />}
               <div>
@@ -230,6 +268,36 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
             </div>
             {error && <p className="gcError">{error}</p>}
           </div>
+        )}
+
+        {matches.length > 1 && (
+          <>
+            <div className="gcResultsHead">
+              <p className="gcHint">{visible.length} match{visible.length === 1 ? '' : 'es'} on BGG, closest first. Tap one to add it.</p>
+              <button type="button" className={`gcPill${gamesOnly ? ' gcOn' : ''}`} aria-pressed={gamesOnly} onClick={() => setGamesOnly(!gamesOnly)}>Games only</button>
+            </div>
+            <div className="gcCandidates">
+              {visible.slice(0, shown).map((m) => {
+                const d = details[m.id] || m; // the search gives name and year; the rest arrives a page at a time
+                return (
+                  <button key={m.id} type="button" className={`gcCandidate${picked && picked.id === m.id ? ' gcSelected' : ''}`} onClick={() => pick(m)} disabled={!!pickingId}>
+                    {d.image ? <img src={d.image} alt="" /> : <span className="gcNoImage">🎲</span>}
+                    <span className="gcCandName">{m.name}</span>
+                    {m.kind === 'boardgameexpansion' && <span className="gcTag">Expansion</span>}
+                    {inNewList(list.data, m, '') && <span className="gcTag">On your list</span>}
+                    <span className="gcMuted">{pickingId === m.id ? 'Getting details…' : facts(d)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {!visible.length && <p className="gcMuted">Only expansions match. Turn off “Games only” to see them.</p>}
+            {visible.length > shown && (
+              <div className="gcRow">
+                <button type="button" className="gcBtn gcSecondary" onClick={() => setShown(shown + PAGE)}>Show {Math.min(PAGE, visible.length - shown)} more ({visible.length - shown} left)</button>
+              </div>
+            )}
+            {detailsFailed && <p className="gcMuted">BGG didn't send some of the details. You can still tap a game to add it.</p>}
+          </>
         )}
       </section>
 

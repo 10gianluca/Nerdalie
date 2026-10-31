@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import {
   newListLayout, newListFields, commonValues, buildNewListRow, parseNewList, inNewList, fileInList, saveNewListRowViaScript,
-  buildHeaderIndex, bggFindCandidates, NEWLIST_TAB, NEWLIST_LINK,
+  buildHeaderIndex, bggFindCandidates, bggSearchAll, rankMatches, NEWLIST_TAB, NEWLIST_LINK,
 } from './collectionUtils.js';
 
 const MAIN = ['Game', 'Year', 'Min Players', 'Max Players', 'Time', 'Type', 'BGG Rating', 'Image', 'BGGID', 'House', 'Played', 'Complete'];
@@ -139,6 +139,33 @@ const SEARCH = `<?xml version="1.0"?><items total="3" termsofuse="x">
   <item type="boardgame" id="27710"><name type="primary" value="Catan: Cities &amp; Knights"/><yearpublished value="1998"/></item></items>`;
 const thingFor = (id, type, name) => `<item type="${type}" id="${id}"><image>https://x/${id}.jpg</image><name type="primary" value="${name}"/><yearpublished value="2000"/><minplayers value="3"/><maxplayers value="4"/><playingtime value="90"/><statistics page="1"><ratings><average value="7.1"/></ratings></statistics></item>`;
 const THINGS = `<?xml version="1.0"?><items termsofuse="x">${thingFor(13, 'boardgame', 'Catan')}${thingFor(926, 'boardgameexpansion', 'Catan: Seafarers')}${thingFor(27710, 'boardgame', 'Catan: Cities &amp; Knights')}</items>`;
+
+test('rankMatches puts the exact title first, then names that start with it, games before expansions, and drops repeats', () => {
+  const r = (id, name, kind = 'boardgame') => ({ id, name, kind, year: '2000' });
+  const ranked = rankMatches([
+    r('1', 'Seafarers of Catan'), r('2', 'Catan: Seafarers', 'boardgameexpansion'), r('3', 'Catan: Starfarers'), r('4', 'Catan'),
+    r('5', 'Catanian Wars'), r('4', 'Catan'), r('6', 'Catan Junior'),
+  ], 'Catan');
+  assert.deepEqual(ranked.map((x) => x.id), ['4', '6', '3', '2', '5', '1']);
+  assert.deepEqual(rankMatches([], 'x'), []);
+  // punctuation and capitals don't matter
+  assert.equal(rankMatches([r('1', 'Other'), r('2', "Dead Man's Draw")], 'dead MANS draw')[0].id, '2');
+});
+
+test('bggSearchAll asks BGG once and returns every match, not just a few', async () => {
+  global.DOMParser = new JSDOM('').window.DOMParser;
+  const calls = [];
+  const items = Array.from({ length: 60 }, (_, i) => `<item type="${i % 4 ? 'boardgameexpansion' : 'boardgame'}" id="${1000 + i}"><name type="primary" value="Catan ${i}"/><yearpublished value="${1990 + (i % 30)}"/></item>`);
+  global.fetch = async (url) => { calls.push(String(url)); return { ok: true, status: 200, text: async () => `<?xml version="1.0"?><items total="60">${items.join('')}</items>` }; };
+  const found = await bggSearchAll('Catan');
+  assert.equal(found.length, 60);
+  assert.equal(calls.length, 1, 'one search request, no per-game lookups');
+  assert.ok(!calls[0].includes('exact'), 'a whole-word search, not an exact-title one');
+  assert.equal(found[0].kind, 'boardgame');
+  assert.equal(found.filter((g) => g.kind === 'boardgameexpansion').length, 45);
+  assert.equal(new Set(found.map((g) => g.id)).size, 60);
+  assert.deepEqual(await bggSearchAll('   '), []);
+});
 
 test('a search with several results gives each one with its details, and says which are expansions', async () => {
   global.DOMParser = new JSDOM('').window.DOMParser;

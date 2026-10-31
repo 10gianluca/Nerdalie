@@ -224,6 +224,7 @@ export async function bggSearch(query, exact = false) {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   return [...doc.querySelectorAll('items > item')].map((it) => ({
     id: it.getAttribute('id') || '',
+    kind: it.getAttribute('type') || 'boardgame', // 'boardgame' or 'boardgameexpansion'
     name: nameOf(it.querySelector('name[type="primary"]') || it.querySelector('name')),
     year: it.querySelector('yearpublished')?.getAttribute('value') || '',
   }));
@@ -316,6 +317,33 @@ export async function bggFindCandidates(query, limit = 6) {
   const things = await bggThing(topIds);
   const order = new Map(topIds.map((id, i) => [id, i]));
   return things.sort((a, b) => order.get(a.id) - order.get(b.id)).slice(0, limit);
+}
+
+// Search results with the closest matches first: the exact title, then names that start with it as whole words ("Catan:
+// Cities & Knights"), then names that start with it, then the rest. Within each of those the games come before their
+// expansions, then shorter names first. A game BGG lists twice is kept once.
+export function rankMatches(results, query) {
+  const q = matchKey(query);
+  const tier = (name) => {
+    const k = matchKey(name);
+    if (k === q) return 0;
+    if (k.startsWith(`${q} `)) return 1;
+    return k.startsWith(q) ? 2 : 3;
+  };
+  const seen = new Set();
+  return results
+    .filter((r) => r.id && !seen.has(r.id) && seen.add(r.id))
+    .map((r, i) => ({ r, i, t: tier(r.name), x: r.kind === 'boardgameexpansion' ? 1 : 0 }))
+    .sort((a, b) => a.t - b.t || a.x - b.x || a.r.name.length - b.r.name.length || a.i - b.i)
+    .map(({ r }) => r);
+}
+
+// Every game and expansion on BGG whose name matches, best matches first. That is one search request and gives only each
+// match's name, year and kind; the details (cover, players, rating) are asked for separately, a page at a time, with bggThing.
+export async function bggSearchAll(query) {
+  const cleaned = cleanQuery(query);
+  if (!cleaned) return [];
+  return rankMatches(await bggSearch(cleaned, false), cleaned);
 }
 
 // Everything in a BGG collection marked "own", with the same stats shape as bggThing()'s results,
