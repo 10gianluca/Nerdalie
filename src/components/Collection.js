@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './Collection.css';
 import {
   fetchSheetCsv, parseCsv, buildHeaderIndex, extraHeaders, distinctValues, filterRows, sortEntries,
-  bggFindCandidates, bggOwnedCollection, missingFromSheet, incompleteRows, buildRowFromThing,
+  bggSearchAll, bggOwnedCollection, missingFromSheet, incompleteRows, buildRowFromThing,
   buildPatchFromThing, appendRowViaScript, updateRowViaScript, bggGameUrl, bggCollectionUrl, cellAt, addPlan,
   DECISIONS_TAB, PLAYS_TAB, parseDecisions, parsePlays, playStats,
 } from './collectionUtils';
@@ -11,6 +11,8 @@ import GamePicker from './GamePicker';
 import Decider, { OWNED_DECK, WISHLIST_DECK } from './Decider';
 import PlaysTab from './PlaysTab';
 import NewList from './NewList';
+import BggMatchList from './BggMatchList';
+import ExtraFields from './ExtraFields';
 import { SCRIPT_HELP } from './sheetScript';
 
 const SETTINGS_KEY = 'nerdalie.collection.settings';
@@ -51,7 +53,8 @@ function Collection() {
   const [addTitle, setAddTitle] = useState('');
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState('');
-  const [addCandidates, setAddCandidates] = useState([]);
+  const [addMatches, setAddMatches] = useState([]); // everything BGG found for the title, best first
+  const [addSearchId, setAddSearchId] = useState(0); // counts the searches, so each one gets a fresh list of matches
   const [addResult, setAddResult] = useState(null); // what the last "add" did: { title, id, sheet: 'added'|'already', bgg: 'have'|'opened'|'unknown' }
 
   // The games you own on BGG, read once and kept so the Add tab can tell whether a game is already there.
@@ -66,7 +69,8 @@ function Collection() {
   // "Fill in missing info": existing rows with a name but blank BGG-fillable columns, reviewed
   // one at a time — each one auto-searches BGG so there's a match to confirm.
   const [enrichQueue, setEnrichQueue] = useState(null); // null = not started this visit
-  const [enrichCandidates, setEnrichCandidates] = useState([]);
+  const [enrichMatches, setEnrichMatches] = useState([]); // everything BGG found for the row's name, best first
+  const [enrichSearchId, setEnrichSearchId] = useState(0);
   const [enrichBusy, setEnrichBusy] = useState(false);
   const [enrichError, setEnrichError] = useState('');
 
@@ -202,14 +206,15 @@ function Collection() {
   // The BGG search for whichever row is now first in the enrich queue; auto-runs whenever that
   // changes (starting the queue, skipping, or saving a row), so there's always something to review.
   async function searchEnrichHead(queueNow) {
-    setEnrichCandidates([]);
+    setEnrichMatches([]);
     setEnrichError('');
     if (!queueNow.length) return;
     const name = cellAt(queueNow[0].row, idx.GAME);
     setEnrichBusy(true);
     try {
-      const found = await bggFindCandidates(name);
-      setEnrichCandidates(found);
+      const found = await bggSearchAll(name);
+      setEnrichSearchId((n) => n + 1);
+      setEnrichMatches(found);
       if (!found.length) setEnrichError(`No BGG matches for "${name}". You can still save any extra info below.`);
     } catch (err) {
       setEnrichError(err.message || 'The search failed');
@@ -253,12 +258,13 @@ function Collection() {
     if (!addTitle.trim()) return;
     setAddBusy(true);
     setAddError('');
-    setAddCandidates([]);
+    setAddMatches([]);
     setAddResult(null);
     closeReview();
     try {
-      const found = await bggFindCandidates(addTitle);
-      setAddCandidates(found);
+      const found = await bggSearchAll(addTitle);
+      setAddSearchId((n) => n + 1);
+      setAddMatches(found);
       if (!found.length) setAddError('No matches on BGG for that title. Try a different spelling.');
     } catch (err) {
       setAddError(err.message || 'The search failed');
@@ -288,7 +294,7 @@ function Collection() {
     const done = (sheet) => {
       setAddResult({ title: review.title, id: review.item.id, sheet, bgg: plan.bgg === 'missing' ? 'opened' : plan.bgg });
       setAddTitle('');
-      setAddCandidates([]);
+      setAddMatches([]);
       closeReview();
     };
     if (plan.sheet === 'have') {
@@ -461,17 +467,7 @@ function Collection() {
         </div>
       </div>
 
-      {!!extras.length && (
-        <div className="gcExtras">
-          <p className="gcHint">Not on BGG — fill these in yourself:</p>
-          {extras.map(({ name, i }) => (
-            <label className="gcField" key={i}>
-              <span>{name}</span>
-              <input className="gcInput" value={reviewExtra[i] || ''} onChange={(e) => setReviewExtra({ ...reviewExtra, [i]: e.target.value })} />
-            </label>
-          ))}
-        </div>
-      )}
+      <ExtraFields fields={extras} rows={rows} values={reviewExtra} onChange={setReviewExtra} hint="Not on BGG — fill these in yourself:" />
 
       <div className="gcRow">
         <button className="gcBtn gcPrimary" onClick={confirmAdd} disabled={reviewBusy || nothingToAdd}>
@@ -720,7 +716,7 @@ function Collection() {
             <section className="gcCard">
               <div className="gcCardHead">
                 <h2>Fill in missing info</h2>
-                <span className="gcHint">Rows with blank year, players, time, rating or image</span>
+                <span className="gcHint">Rows with a blank year, players, time, type, rating, BGG link or image</span>
               </div>
               {!settings.sheetLink ? (
                 <p className="gcMuted">Add your Google Sheet link in Settings to use this.</p>
@@ -738,15 +734,10 @@ function Collection() {
                   {enrichBusy && <p className="gcMuted">Searching BGG…</p>}
                   {enrichError && <p className="gcError">{enrichError}</p>}
 
-                  {!!enrichCandidates.length && review?.source !== 'enrich' && (
-                    <div className="gcCandidates">
-                      {enrichCandidates.map((c) => (
-                        <button key={c.id} type="button" className="gcCandidate" onClick={() => pickEnrichCandidate(c)}>
-                          {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
-                          <span className="gcCandName">{c.name}</span>
-                          <span className="gcMuted">{c.year}{c.rating ? ` · ★${c.rating}` : ''}</span>
-                        </button>
-                      ))}
+                  {/* hidden, not removed, while a match is open, so closing it brings the same list back */}
+                  {!!enrichMatches.length && (
+                    <div hidden={review?.source === 'enrich'}>
+                      <BggMatchList key={enrichSearchId} matches={enrichMatches} onPick={pickEnrichCandidate} hint="Tap the one that is this row." />
                     </div>
                   )}
                   {enrichQueue && enrichQueue.length > 0 && !enrichBusy && review?.source !== 'enrich' && (
@@ -775,16 +766,16 @@ function Collection() {
               </form>
               {addError && <p className="gcError">{addError}</p>}
 
-              {!!addCandidates.length && (
-                <div className="gcCandidates">
-                  {addCandidates.map((c) => (
-                    <button key={c.id} type="button" className={`gcCandidate${review?.item.id === c.id && review.source === 'search' ? ' gcSelected' : ''}`} onClick={() => openReview({ item: c, title: addTitle, source: 'search' })}>
-                      {c.image ? <img src={c.image} alt="" /> : <span className="gcNoImage">🎲</span>}
-                      <span className="gcCandName">{c.name}</span>
-                      <span className="gcMuted">{c.year}{c.rating ? ` · ★${c.rating}` : ''}</span>
-                    </button>
-                  ))}
-                </div>
+              {!!addMatches.length && (
+                <BggMatchList
+                  key={addSearchId}
+                  matches={addMatches}
+                  onPick={(full) => openReview({ item: full, title: full.name, source: 'search' })}
+                  selectedId={review && review.source === 'search' ? review.item.id : ''}
+                  tags={(m) => (addPlan(m, m.name, rows, idx, null).sheet === 'have' ? ['In your sheet'] : [])}
+                  autoPick
+                  hint="Tap one to add it."
+                />
               )}
               {review && review.source === 'search' && reviewCard}
 
@@ -811,13 +802,13 @@ function Collection() {
           <summary>How this works</summary>
           <ul>
             <li>The <b>Collection</b> tab and <b>Sync</b> read your Sheet and your public "owned" BGG list directly — nothing needs to be typed twice. <b>Sync</b> adds the games you own on BGG that your sheet is missing, one at a time.</li>
-            <li><b>Add</b> searches BGG for a game. It adds it to your sheet unless it's already there, and checks your BGG collection too. If the game isn't in your BGG collection, BGG's page opens so you can press Add to Collection yourself: BoardGameGeek doesn't let other websites change your collection.</li>
-            <li><b>New list</b> is for games you're thinking about. Search BGG, tap the right game if several match, and type in your own columns (the ones BGG doesn't know, like House, Played and Complete). BGG fills in the rest. It goes in a <b>New List</b> tab of your sheet, which has the same columns as your main sheet plus a <b>BGG Link</b>. A game that's already on that list isn't added twice.</li>
+            <li><b>Add</b> searches BGG and lists every match, so you tap the right game. BGG fills in the year, players, time, type, rating and BGG Link, and you type the columns BGG doesn't know (Book, House, Played, Added, Complete). It adds it to your sheet unless it's already there, and checks your BGG collection too. If the game isn't in your BGG collection, BGG's page opens so you can press Add to Collection yourself: BoardGameGeek doesn't let other websites change your collection.</li>
+            <li><b>New list</b> is for games you're thinking about. Search BGG, tap the right game if several match, and type in your own columns (the ones BGG doesn't know, like House, Played and Complete). BGG fills in the rest. It goes in a <b>New List</b> tab of your sheet, which has the same columns as your main sheet (and a <b>BGG Link</b>, if yours doesn't have one). A game that's already on that list isn't added twice.</li>
             <li><b>Decide</b> shows one game you own at a time. Keep, Discard or Play and see (or press <kbd>K</kbd> <kbd>D</kbd> <kbd>P</kbd>) saves the game and your choice to a second tab of your sheet called <b>Decisions</b>, and the game doesn't come up again. Changed your mind? Use "Change my last answer", or answer it again later by editing the tab.</li>
             <li><b>Wishlist</b> does the same for your BGG wishlist, most wanted first: Buy, Drop or Later (<kbd>B</kbd> <kbd>D</kbd> <kbd>L</kbd>), saved in a <b>Wishlist</b> tab. It never changes the wishlist on BGG itself, so remove dropped games there yourself.</li>
             <li><b>Plays</b> is a log of what you've actually played (date, game, who, winner, notes), kept in a <b>Plays</b> tab. <b>Pick a game</b> uses it for "never played" and "not in 30+ days", and can leave out games you marked Discard.</li>
             <li><b>Pick a game</b> chooses one of the games in your sheet at random. Narrow it by players, time, type (solo, co-op, team…) and theme, then press Skip until one sounds right. Players, time and type come from your sheet; themes are BoardGameGeek's categories, looked up with the BGGID column and remembered in this browser.</li>
-            <li><b>Fill in missing info</b> looks at rows already in your sheet, searches BGG for each one, and — once you confirm the match — fills in only the blank cells, leaving anything you've already typed alone.</li>
+            <li><b>Fill in missing info</b> looks at rows already in your sheet, searches BGG for each one and lists every match. Once you tap the right one it fills in only the blank cells (the BGG Link too), leaving anything you've already typed alone.</li>
             <li>Saving to the sheet works through the small script in Settings — no login needed on this page. If you set the script up before the Decide feature existed, paste in the latest code and redeploy it as a new version (same URL).</li>
             <li>This page only ever reads your BGG collection; it never changes it.</li>
             <li>Add a <b>BGGID</b> column to your sheet (optional) and future syncs will match by BGG's own ID instead of the name, which is more reliable for reprints and renamed editions.</li>

@@ -85,10 +85,11 @@ const HEADER_ALIASES = {
   rating: 'BGG RATING', 'bgg rating': 'BGG RATING',
   image: 'IMAGE',
   bggid: 'BGGID', 'bgg id': 'BGGID',
+  'bgg link': 'LINK', 'bgg url': 'LINK',
 };
-export const CANONICAL = ['GAME', 'YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'BGG RATING', 'IMAGE', 'BGGID'];
+export const CANONICAL = ['GAME', 'YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'BGG RATING', 'IMAGE', 'BGGID', 'LINK'];
 
-// Maps a canonical column name (GAME, YEAR, MIN, MAX, TIME, TYPE, BGG RATING, IMAGE, BGGID) to its
+// Maps a canonical column name (GAME, YEAR, MIN, MAX, TIME, TYPE, BGG RATING, IMAGE, BGGID, LINK) to its
 // index in `headers`, however the sheet actually spelled it, or -1 if the sheet doesn't have it.
 export function buildHeaderIndex(headers) {
   const found = {};
@@ -97,13 +98,14 @@ export function buildHeaderIndex(headers) {
     if (!(canon in found)) found[canon] = i;
   });
   const get = (name) => (name in found ? found[name] : -1);
-  return { GAME: get('GAME'), YEAR: get('YEAR'), MIN: get('MIN'), MAX: get('MAX'), TIME: get('TIME'), TYPE: get('TYPE'), RATING: get('BGG RATING'), IMAGE: get('IMAGE'), BGGID: get('BGGID') };
+  return { GAME: get('GAME'), YEAR: get('YEAR'), MIN: get('MIN'), MAX: get('MAX'), TIME: get('TIME'), TYPE: get('TYPE'), RATING: get('BGG RATING'), IMAGE: get('IMAGE'), BGGID: get('BGGID'), LINK: get('LINK') };
 }
 
-// Header names the sheet has beyond the ones BGG can fill in — these need a person to fill them in.
+// Header names the sheet has beyond the ones BGG can fill in — these need a person to fill them in (Book, House, Played,
+// Added, Complete...). A column with no name is just spacing, and has nothing to type into.
 export function extraHeaders(headers, idx) {
-  const known = new Set([idx.GAME, idx.YEAR, idx.MIN, idx.MAX, idx.TIME, idx.TYPE, idx.RATING, idx.IMAGE, idx.BGGID].filter((i) => i >= 0));
-  return headers.map((h, i) => ({ name: h, i })).filter(({ i }) => !known.has(i));
+  const known = new Set([idx.GAME, idx.YEAR, idx.MIN, idx.MAX, idx.TIME, idx.TYPE, idx.RATING, idx.IMAGE, idx.BGGID, idx.LINK].filter((i) => i >= 0));
+  return headers.map((h, i) => ({ name: h, i })).filter(({ name, i }) => !known.has(i) && (name || '').trim());
 }
 
 export const cellAt = (row, i) => (i >= 0 && i < row.length ? (row[i] || '').trim() : '');
@@ -170,7 +172,7 @@ export function sortEntries(entries, idx, key, dir = 'asc') {
 export const matchKey = (name) => (name || '').toLowerCase().replace(/['’`]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
 // The canonical columns a BGG match can fill in on an existing row.
-const ENRICHABLE = ['YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'RATING', 'IMAGE', 'BGGID'];
+const ENRICHABLE = ['YEAR', 'MIN', 'MAX', 'TIME', 'TYPE', 'RATING', 'IMAGE', 'BGGID', 'LINK'];
 
 // Sheet rows that have a name but are missing at least one BGG-fillable value the sheet actually
 // has a column for. A column the sheet doesn't track at all doesn't count as "missing".
@@ -197,6 +199,7 @@ export function buildPatchFromThing(idx, existingRow, thing) {
   maybe('RATING', thing.rating);
   maybe('IMAGE', thing.image);
   maybe('BGGID', thing.id);
+  maybe('LINK', thing.id ? bggGameUrl(thing.id) : '');
   return patch;
 }
 
@@ -419,6 +422,7 @@ export function buildRowFromThing(headers, idx, thing, titleOverride, extraValue
   set(idx.RATING, thing.rating || '');
   set(idx.IMAGE, thing.image || '');
   set(idx.BGGID, thing.id || '');
+  set(idx.LINK, thing.id ? bggGameUrl(thing.id) : '');
   for (const [i, v] of Object.entries(extraValues)) row[Number(i)] = v;
   return row;
 }
@@ -702,8 +706,9 @@ export function inNewList(list, item, name) {
 // the tab hasn't got yet becomes a new column at the end. Returns the tab's header and the row as they now stand, so the page
 // can show the new game straight away. An empty `listHeader` is a tab that doesn't exist yet.
 export function fileInList(listHeader, header, row) {
-  const outHeader = listHeader.slice();
-  const outRow = listHeader.map(() => '');
+  const base = listHeader.length ? listHeader : header; // a tab that isn't there yet is made with all of these columns, unnamed ones too
+  const outHeader = base.slice();
+  const outRow = base.map(() => '');
   header.forEach((h, k) => {
     const key = normalizeHeader(h);
     if (!key) return;

@@ -1,32 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  bggSearchAll, bggThing, bggGameUrl, fetchSheetCsv, addPlan, buildHeaderIndex, cellAt, commonValues, newListLayout, newListFields,
+  bggSearchAll, bggGameUrl, fetchSheetCsv, addPlan, buildHeaderIndex, cellAt, newListLayout, newListFields,
   buildNewListRow, parseNewList, inNewList, fileInList, saveNewListRowViaScript, matchKey, NEWLIST_TAB,
 } from './collectionUtils';
+import BggMatchList, { facts } from './BggMatchList';
+import ExtraFields from './ExtraFields';
 
 /* The New list tab: search BGG, tap the right game from everything that matches, type in your own columns (the ones BGG
    doesn't know, like House, Played and Complete), and it goes into a "New List" tab of your sheet with everything else filled
    in from BGG and a link to the game's BGG page. The tab has the same columns as your main sheet, plus the link. */
-
-const PAGE = 20; // matches shown at a time, and the most BGG will give details for in one request
-
-const facts = (g) => [
-  g.year,
-  (g.minPlayers || g.maxPlayers) && `${g.minPlayers || '?'}–${g.maxPlayers || '?'} players`,
-  g.playTime && `${g.playTime} min`,
-  g.rating && `★${g.rating}`,
-].filter(Boolean).join(' · ');
 
 function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNeedScript, onCount }) {
   const [title, setTitle] = useState('');
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
   const [matches, setMatches] = useState([]); // everything BGG found for the search: { id, name, year, kind }, best first
-  const [details, setDetails] = useState({}); // BGG's full details (cover, players, rating...) by id, as they are fetched
-  const [shown, setShown] = useState(PAGE); // how many matches are on screen
-  const [gamesOnly, setGamesOnly] = useState(false); // leave out the expansions
-  const [pickingId, setPickingId] = useState(''); // a match whose details are being fetched because you tapped it
-  const [detailsFailed, setDetailsFailed] = useState(false);
+  const [searchId, setSearchId] = useState(0); // counts the searches, so each one gets a fresh list of matches
   const [picked, setPicked] = useState(null); // the BGG game you chose
   const [name, setName] = useState('');
   const [values, setValues] = useState({}); // your own columns: { columnIndex: text }
@@ -37,11 +26,8 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
   const listCard = useRef(null);
   const formCard = useRef(null);
   const reviewCard = useRef(null);
-  const asked = useRef(new Set()); // ids whose details have been asked for
 
-  const visible = useMemo(() => (gamesOnly ? matches.filter((m) => m.kind !== 'boardgameexpansion') : matches), [matches, gamesOnly]);
   const fields = useMemo(() => newListFields(headers, idx), [headers, idx]);
-  const choices = useMemo(() => Object.fromEntries(fields.map(({ i }) => [i, commonValues(rows, i)])), [fields, rows]);
   const ready = hasSheet && !loading && headers.length > 0 && idx.GAME >= 0;
 
   // The tab as read from the sheet, plus anything added on this visit that Google hasn't shown yet, so a refresh a moment
@@ -83,46 +69,9 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
     if (done && listCard.current && listCard.current.scrollIntoView) listCard.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [done]);
 
-  // The search only gives names, so the cover, players and rating of the matches on screen are fetched a page at a time,
-  // in the background, and fill in as they arrive.
-  async function loadDetails(items) {
-    const ids = items.map((m) => m.id).filter((id) => !asked.current.has(id));
-    ids.forEach((id) => asked.current.add(id));
-    for (let i = 0; i < ids.length; i += PAGE) {
-      const batch = ids.slice(i, i + PAGE);
-      try {
-        const things = await bggThing(batch);
-        setDetails((d) => ({ ...d, ...Object.fromEntries(things.map((t) => [t.id, t])) }));
-      } catch (_) {
-        batch.forEach((id) => asked.current.delete(id)); // so showing them again tries again
-        setDetailsFailed(true);
-      }
-    }
-  }
-
-  useEffect(() => {
-    loadDetails(visible.slice(0, shown));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, shown]);
-
-  // Tapping a match: its full details are needed to fill the row, so fetch them now if they haven't arrived yet.
-  async function pick(match) {
+  // A match was tapped (or was the only one): its full details are what fill the row.
+  function choose(full) {
     setError('');
-    let full = details[match.id];
-    if (!full) {
-      setPickingId(match.id);
-      try {
-        [full] = await bggThing([match.id]);
-      } catch (err) {
-        setError(err.message || 'Could not get that game from BGG.');
-      }
-      setPickingId('');
-      if (!full) {
-        setError((e) => e || "BGG didn't send that game's details. Try again.");
-        return;
-      }
-      setDetails((d) => ({ ...d, [full.id]: full }));
-    }
     setPicked(full);
     setName(full.name);
     setValues({});
@@ -139,15 +88,13 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
     setSearching(true);
     setError('');
     setMatches([]);
-    setShown(PAGE);
-    setDetailsFailed(false);
     setPicked(null);
     setDone(null);
     try {
       const found = await bggSearchAll(title);
+      setSearchId((n) => n + 1);
       setMatches(found);
       if (!found.length) setError('No matches on BGG for that title. Try a different spelling.');
-      else if (found.length === 1) pick(found[0]); // nothing to choose between
     } catch (err) {
       setError(err.message || 'The search failed');
     } finally {
@@ -243,24 +190,7 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
               <input className="gcInput" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
 
-            {!!fields.length && (
-              <div className="gcExtras">
-                <p className="gcHint">From your sheet. BGG fills in the rest.</p>
-                {fields.map(({ name: label, i }) => (
-                  <div className="gcField" key={i}>
-                    <span>{label}</span>
-                    {choices[i].length > 0 && (
-                      <div className="gcPills">
-                        {choices[i].map((v) => (
-                          <button key={v} type="button" className={`gcPill${values[i] === v ? ' gcOn' : ''}`} aria-pressed={values[i] === v} onClick={() => setValues({ ...values, [i]: values[i] === v ? '' : v })}>{v}</button>
-                        ))}
-                      </div>
-                    )}
-                    <input className="gcInput" aria-label={label} value={values[i] || ''} onChange={(e) => setValues({ ...values, [i]: e.target.value })} />
-                  </div>
-                ))}
-              </div>
-            )}
+            <ExtraFields fields={fields} rows={rows} values={values} onChange={setValues} />
 
             <div className="gcRow">
               <button className="gcBtn gcPrimary" onClick={add} disabled={saving || alreadyListed}>{saving ? 'Adding…' : alreadyListed ? 'Already on your new list' : 'Add to my new list'}</button>
@@ -270,34 +200,16 @@ function NewList({ active, hasSheet, headers, rows, idx, loading, settings, onNe
           </div>
         )}
 
-        {matches.length > 1 && (
-          <>
-            <div className="gcResultsHead">
-              <p className="gcHint">{visible.length} match{visible.length === 1 ? '' : 'es'} on BGG, closest first. Tap one to add it.</p>
-              <button type="button" className={`gcPill${gamesOnly ? ' gcOn' : ''}`} aria-pressed={gamesOnly} onClick={() => setGamesOnly(!gamesOnly)}>Games only</button>
-            </div>
-            <div className="gcCandidates">
-              {visible.slice(0, shown).map((m) => {
-                const d = details[m.id] || m; // the search gives name and year; the rest arrives a page at a time
-                return (
-                  <button key={m.id} type="button" className={`gcCandidate${picked && picked.id === m.id ? ' gcSelected' : ''}`} onClick={() => pick(m)} disabled={!!pickingId}>
-                    {d.image ? <img src={d.image} alt="" /> : <span className="gcNoImage">🎲</span>}
-                    <span className="gcCandName">{m.name}</span>
-                    {m.kind === 'boardgameexpansion' && <span className="gcTag">Expansion</span>}
-                    {inNewList(list.data, m, '') && <span className="gcTag">On your list</span>}
-                    <span className="gcMuted">{pickingId === m.id ? 'Getting details…' : facts(d)}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {!visible.length && <p className="gcMuted">Only expansions match. Turn off “Games only” to see them.</p>}
-            {visible.length > shown && (
-              <div className="gcRow">
-                <button type="button" className="gcBtn gcSecondary" onClick={() => setShown(shown + PAGE)}>Show {Math.min(PAGE, visible.length - shown)} more ({visible.length - shown} left)</button>
-              </div>
-            )}
-            {detailsFailed && <p className="gcMuted">BGG didn't send some of the details. You can still tap a game to add it.</p>}
-          </>
+        {matches.length > 0 && (
+          <BggMatchList
+            key={searchId}
+            matches={matches}
+            onPick={choose}
+            selectedId={picked ? picked.id : ''}
+            tags={(m) => (inNewList(list.data, m, '') ? ['On your list'] : [])}
+            autoPick
+            hint="Tap one to add it."
+          />
         )}
       </section>
 
